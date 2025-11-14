@@ -1,3 +1,5 @@
-class Metrics:
-    def __init__(self):
-        raise NotImplementedError("Metrics class is not yet implemented.")
+from enum import Enum
+
+class ForecastMetricType(Enum):
+    MAE = "mae"
+    MSE = "mse"
