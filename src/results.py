@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from forecasting.forecast_model import ForecastModelID
 from metrics import ForecastMetricType
-from profiling.profiling_result import Profile
+from profiling.profiling_result import SegmentationResult
 
 
 @dataclass
 class ProfileForecastingMatching:
-    profile: Profile
+    profile: SegmentationResult
     model_results: dict[ForecastModelID, dict[ForecastMetricType, float]]
 
     def overall_score_by_metric(self, metric: ForecastMetricType) -> float:

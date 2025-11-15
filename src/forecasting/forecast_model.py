@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from logging import Logger
 from forecasting.forecast_result import ForecastPredictionResult
-from input import PredictionInput, FitInput
+from input import PredictionInput, Input
 from metrics import ForecastMetricType
 from storage.storage import BaseStorage
 import pandas as pd
@@ -21,7 +21,7 @@ class ForecastModel(ABC):
     def fit(
         self, 
         data: pd.DataFrame, 
-        input: FitInput
+        input: Input
     ) -> dict[ForecastMetricType, float]:
         """Fit the forecasting model to the provided data."""
         ...

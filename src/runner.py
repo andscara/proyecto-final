@@ -1,6 +1,6 @@
 import logging
 from forecasting.forecast_manager import ForecastManager
-from input import FitInput, PredictionInput
+from input import Input
 from metrics import ForecastMetricType
 from profiling.profiling_manager import ProfilingManager
 from results import ProfileForecastingMatching, TrainingResult
@@ -8,25 +8,27 @@ from storage.storage import BaseStorage
 
 
 def train(
-    input: FitInput,
+    input: Input,
     logger: logging.Logger,
     storage: BaseStorage,
     profiling_manager: ProfilingManager,
     forecast_manager: ForecastManager
 ):
     logger.info("Starting training phase.")
+    storage.initialize()
     # Need to get all the profiler results and pass them to forecasting models
     data = input.data_source.read_data() # TODO: Change this to read in batches
     logger.info("Starting profiling phase.")
-    profiles = profiling_manager.run_profilers(data)
+    segmentation_results = profiling_manager.run_profilers(data)
     profile_forecast_matchings: list[ProfileForecastingMatching] = []
-    # For each profiling result, we need to run the forecast models
-    for profile in profiles:
-        logger.info(f"Processing profiling result for profiler {profile.id}")
-        model_fit_results = forecast_manager.fit(input, data)
-        logger.info(f"Best models for profiler {profile.id}: {model_fit_results}")
+    # For each segmentation result, we need to run the forecast models
+    for segmentation_result in segmentation_results:
+        storage.save_segmentation_result(segmentation_result)
+        logger.info(f"Processing profiling result for profiler {segmentation_result.id}")
+        model_fit_results = forecast_manager.fit(input, segmentation_result.average_data)
+        logger.info(f"Best models for profiler {segmentation_result.id}: {model_fit_results}")
         profile_forecast_matching = ProfileForecastingMatching(
-            profile=profile,
+            profile=segmentation_result,
             model_results=model_fit_results
         )
         profile_forecast_matchings.append(profile_forecast_matching)
@@ -47,7 +49,8 @@ def train(
     
 
 def predict(
-    input: PredictionInput,
+    input: Input,
+    metric: ForecastMetricType,
     profiling_manager: ProfilingManager,
     forecast_manager: ForecastManager
 ):

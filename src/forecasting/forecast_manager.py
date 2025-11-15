@@ -4,7 +4,7 @@ from logging import Logger
 from forecasting.forecast_model import ForecastModel, ForecastModelID
 import pandas as pd
 
-from input import FitInput
+from input import Input
 from metrics import ForecastMetricType
 
 ForecastFitResult: TypeAlias = dict[ForecastModelID, dict[ForecastMetricType, float]]
@@ -17,7 +17,7 @@ class ForecastManager:
 
     def fit(
         self, 
-        input: FitInput, 
+        input: Input, 
         data: pd.DataFrame
     ) -> ForecastFitResult:
         results: ForecastFitResult = defaultdict(lambda: dict[ForecastMetricType, float]())
