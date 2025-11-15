@@ -3,7 +3,7 @@ from profiling.profiler import Profiler, ProfilerID
 import torch
 import torch.nn as nn
 from dataclasses import dataclass   
-from profiling.profiling_result import SegmentationResult
+from profiling.segmentation_result import SegmentationResult
 
 @dataclass
 class SomProfilerID(ProfilerID):

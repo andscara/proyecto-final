@@ -30,7 +30,7 @@ class ForecastModel(ABC):
     def predict(
         self,
         data: pd.DataFrame, 
-        input: PredictionInput
+        input: Input
     ) -> ForecastPredictionResult:
         """Predict future values for a given number of steps."""
         ...

@@ -3,7 +3,7 @@ from dataclasses import asdict
 import pandas as pd
 from input import Input
 from profiling.profiler import ProfilerID
-from profiling.profiling_result import SegmentationResult
+from profiling.segmentation_result import SegmentationResult
 from results import TrainingResult
 from pathlib import Path
 import json

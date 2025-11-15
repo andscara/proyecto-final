@@ -1,6 +1,6 @@
 import logging
 from profiling.profiler import Profiler
-from profiling.profiling_result import SegmentationResult
+from profiling.segmentation_result import SegmentationResult
 import pandas as pd
 
 from storage.storage import BaseStorage

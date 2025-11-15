@@ -1,12 +1,6 @@
 from dataclasses import dataclass
 
-from forecasting.forecast_model import ForecastModelID
-from metrics import ForecastMetricType
 
-
-@dataclass
-class ForecastFitResult:
-    results: dict[ForecastMetricType, tuple[ForecastModelID, float]]
 
 @dataclass
 class ForecastPredictionResult:

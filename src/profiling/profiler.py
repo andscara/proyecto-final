@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from profiling.profiling_result import SegmentationResult
+from profiling.segmentation_result import SegmentationResult
 import pandas as pd
 
 @dataclass
