@@ -12,11 +12,15 @@ from statsforecast import StatsForecast
 import pickle
 import numpy as np
 
+@dataclass
+class AutoARIMAModelId(ForecastModelID):
+    season_length: list[int]
+
+
 class ARIMAModel(ForecastModel):
 
-    def __init__(self, logger: Logger, model_id: ForecastModelID):
-        self.logger = logger
-        self.model_id = model_id
+    def __init__(self, logger: Logger, model_id: AutoARIMAModelId):
+        super().__init__(logger, model_id)
 
     def fit(
         self,
@@ -24,7 +28,7 @@ class ARIMAModel(ForecastModel):
         input: Input
     ) -> dict[ForecastMetricType, float]:
         mstl = MSTL(
-            season_length=[24, 24 * 7],
+            season_length=self.model_id.season_length,
             trend_forecaster=AutoARIMA()
         )
         freq = 'h'
