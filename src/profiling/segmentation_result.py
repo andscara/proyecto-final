@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from profiling.profiler import ProfilerID
+from . import ProfilerID
 import pandas as pd
 
 @dataclass

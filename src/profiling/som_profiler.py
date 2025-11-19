@@ -1,9 +1,8 @@
 import pandas as pd
-from profiling.profiler import Profiler, ProfilerID
+from . import Profiler, ProfilerID, SegmentationResult
 import torch
 import torch.nn as nn
-from dataclasses import dataclass   
-from profiling.segmentation_result import SegmentationResult
+from dataclasses import dataclass    
 
 @dataclass
 class SomProfilerID(ProfilerID):
