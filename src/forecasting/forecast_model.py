@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from logging import Logger
 from forecasting.forecast_result import ForecastPredictionResult
-from input import PredictionInput, Input
+from input import Input
 from metrics import ForecastMetricType
 from storage.storage import BaseStorage
 import pandas as pd
