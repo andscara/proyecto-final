@@ -1,6 +1,6 @@
 import logging
-from profiling.profiler import Profiler
-from profiling.segmentation_result import SegmentationResult
+from . import Profiler
+from . import SegmentationResult
 import pandas as pd
 
 from storage.storage import BaseStorage
@@ -20,11 +20,12 @@ class ProfilingManager:
     def run_profilers(self, data: pd.DataFrame) -> list[SegmentationResult]:
         results: list[SegmentationResult] = []
         for profiler in self._profilers:
-            profiling_result = self._storage.get_segmentation_result(profiler.id)
-            if profiling_result is not None:
+            existing_result = self._storage.get_segmentation_result(profiler.id)
+            if existing_result is not None:
                 self._logger.info(f"Skipping profiler {profiler.id} as result already exists in storage.")
-                results.append(profiling_result)
+                results.append(SegmentationResult(profiler.id, existing_result[0], existing_result[1]))
                 continue
+
             self._logger.info(f"Running profiler: {profiler.id}")
             profiling_result = profiler.profile(data)
             self._logger.info(f"Profiler {profiler.id} completed with {len(profiling_result.mapping)} profiles.")

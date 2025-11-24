@@ -1,11 +1,6 @@
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from profiling.segmentation_result import SegmentationResult
 import pandas as pd
-
-@dataclass
-class ProfilerID:
-    id: str
+from . import ProfilerID, SegmentationResult
 
 class Profiler(ABC):
     
