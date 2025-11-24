@@ -13,3 +13,6 @@ class Input:
     """
     data_source : DataSource
     horizon : Horizon
+
+    def __str__(self):
+        return f"{self.data_source}_{self.horizon}"
