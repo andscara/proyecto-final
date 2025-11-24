@@ -302,7 +302,6 @@ class InformerForecastModel(ForecastModel):
         input: Input
     ) -> dict[ForecastMetricType, float]:
         cross_validation_results: list[dict[ForecastMetricType, float]] = []
-        self._best_model_per_metric = {}
         for iteration, _ in enumerate(range(self._cross_validation_count)):
             self.logger.info(f"Starting cross-validation fold {iteration + 1} of {self._cross_validation_count}")
             train_df, val_df = self.get_train_val_dfs(data, input)
