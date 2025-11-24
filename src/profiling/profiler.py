@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 import pandas as pd
 from . import ProfilerID, SegmentationResult
 
-class Profiler(ABC):
-    
-    def __init__(self, id: ProfilerID):
+T = TypeVar('T', bound=ProfilerID)
+
+class Profiler[T](ABC):
+
+    def __init__(self, id: T):
         super().__init__()
         self.id = id
 

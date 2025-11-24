@@ -11,6 +11,10 @@ class DataSource(ABC):
     def read_data(self) -> pd.DataFrame:
         pass
 
+    @abstractmethod
+    def __str__(self):
+        pass
+
 class ParquetDataSource(DataSource):
     """
     Data source class for reading data from a Parquet file.
@@ -24,3 +28,6 @@ class ParquetDataSource(DataSource):
 
     def read_data(self) -> pd.DataFrame:
         return pd.read_parquet(self.file_path)
+
+    def __str__(self):
+        return self.file_path

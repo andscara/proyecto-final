@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "darts>=0.38.0",
     "fastparquet>=2024.11.0",
+    "numpy<2",
     "pandas>=2.3.3",
     "pyarrow>=22.0.0",
     "statsforecast>=2.0.3",
