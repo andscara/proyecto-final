@@ -2,9 +2,9 @@ import pandas as pd
 from . import Profiler, ProfilerID, SegmentationResult
 import torch
 import torch.nn as nn
-from dataclasses import dataclass    
+from dataclasses import dataclass
 
-@dataclass
+@dataclass(kw_only=True)
 class SomProfilerID(ProfilerID):
     rows: int
     cols: int
@@ -14,7 +14,7 @@ class SomProfilerID(ProfilerID):
     id: str = "som_profiler"
 
 
-class SomProfiler(Profiler, nn.Module):
+class SomProfiler(Profiler[SomProfilerID], nn.Module):
 
     def __init__(
             self,
@@ -27,6 +27,7 @@ class SomProfiler(Profiler, nn.Module):
             device: str = "cpu"
         ):
         id = SomProfilerID(
+            id="som",
             rows=rows,
             cols=cols,
             learning_rate=learning_rate,

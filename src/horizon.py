@@ -16,3 +16,6 @@ class Horizon:
     """
     type : HorizonType
     length : int
+
+    def __str__(self):
+        return f"{self.type.name}_{self.length}"

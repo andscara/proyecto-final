@@ -1,12 +1,12 @@
 from logging import Logger
 from forecasting.forecast_result import ForecastPredictionResult
-from input import PredictionInput, Input
+from input import Input
 from horizon import Horizon, HorizonType
 from metrics import ForecastMetricType
 from storage.storage import BaseStorage
 import pandas as pd
 from dataclasses import dataclass
-from forecast_model import ForecastModel, ForecastModelID
+from forecasting.forecast_model import ForecastModel, ForecastModelID
 from statsforecast.models import MSTL, AutoARIMA
 from statsforecast import StatsForecast
 import pickle

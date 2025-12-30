@@ -20,7 +20,7 @@ class ProfilingManager:
     def run_profilers(self, data: pd.DataFrame) -> list[SegmentationResult]:
         results: list[SegmentationResult] = []
         for profiler in self._profilers:
-            existing_result = self._storage.get_segmentation_result(profiler.id)
+            existing_result = self._storage.get_segmentation_result(str(profiler.id))
             if existing_result is not None:
                 self._logger.info(f"Skipping profiler {profiler.id} as result already exists in storage.")
                 results.append(SegmentationResult(profiler.id, existing_result[0], existing_result[1]))
