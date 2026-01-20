@@ -12,5 +12,19 @@ dependencies = [
     "pandas>=2.3.3",
     "pyarrow>=22.0.0",
     "statsforecast>=2.0.3",
-    "torch==2.2.2",
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
 ]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-gpu", marker = "sys_platform == 'win32'" }
+]
+torchvision = [
+  { index = "pytorch-gpu", marker = "sys_platform == 'win32'" }
+]
+
+[[tool.uv.index]]
+name = "pytorch-gpu"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

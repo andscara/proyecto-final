@@ -19,6 +19,7 @@ def adjust_learning_rate(
     :param epoch: current epoch
     :param lradj: adjust learning rate [type1, type2]
     """
+
     # lr = args.learning_rate * (0.2 ** (epoch // 2))
     lr_adjust = {}
     if lradj == 'type1':
@@ -28,6 +29,7 @@ def adjust_learning_rate(
             2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6,
             10: 5e-7, 15: 1e-7, 20: 5e-8
         }
+    return
     if epoch in lr_adjust.keys():
         lr = lr_adjust[epoch]
         for param_group in optimizer.param_groups:
