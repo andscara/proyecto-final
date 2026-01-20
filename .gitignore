@@ -2,3 +2,8 @@
 *.parquet
 *.csv
 __pycache__/
+
+# DS Store files
+.DS_Store
+
+checkpoints/

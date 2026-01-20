@@ -1,0 +1,167 @@
+import os
+import time
+import torch
+import torch.nn as nn
+from torch.utils import data
+import numpy as np
+
+from forecasting.autoformer.tools import EarlyStopping, adjust_learning_rate
+
+
+class Trainer:
+    def __init__(
+        self,
+        model: nn.Module,
+        train_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
+        val_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
+        label_len: int,
+        pred_len: int,
+        output_attention: bool,
+        device_name: str = 'cpu',
+    ):
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.label_len = label_len
+        self.pred_len = pred_len
+        self.output_attention = output_attention
+        self.device = torch.device(device_name)
+
+    def _predict(
+        self,
+        batch_x: torch.Tensor, 
+        batch_y: torch.Tensor, 
+        batch_x_mark: torch.Tensor, 
+        batch_y_mark: torch.Tensor
+    ):
+        # decoder input
+        dec_inp = torch.zeros_like(batch_y[:, -self.pred_len:, :]).float()
+        dec_inp = torch.cat([batch_y[:, :self.label_len, :], dec_inp], dim=1).float().to(self.device)
+        # encoder - decoder
+
+        def _run_model():
+            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+            if self.output_attention:
+                outputs = outputs[0]
+            return outputs
+
+        # if self.args.use_amp:
+        #     with torch.cuda.amp.autocast():
+        #         outputs = _run_model()
+        # else:
+        outputs = _run_model()
+
+        # f_dim = -1 if self.args.features == 'MS' else 0
+        f_dim = 0
+        outputs = outputs[:, -self.pred_len:, f_dim:]
+        batch_y = batch_y[:, -self.pred_len:, f_dim:].to(self.device)
+
+        return outputs, batch_y
+    
+    def vali(
+        self, 
+        data_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
+        criterion: nn.Module
+    ):
+        total_loss = []
+        self.model.eval()
+        with torch.no_grad():
+            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):
+                batch_x = batch_x.float().to(self.device)
+                batch_y = batch_y.float()
+
+                batch_x_mark = batch_x_mark.float().to(self.device)
+                batch_y_mark = batch_y_mark.float().to(self.device)
+
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
+                pred = outputs.detach().cpu()
+                true = batch_y.detach().cpu()
+
+                loss = criterion(pred, true)
+
+                total_loss.append(loss)
+        total_loss = np.average(total_loss)
+        self.model.train()
+        return total_loss
+
+    def train(
+        self,
+        patience: int = 7,
+        verbose: bool = True,
+        learning_rate: float = 0.001,
+        train_epochs: int = 10,
+        checkpoint_path: str = './checkpoints/',
+    ):
+        time_now = time.time()
+
+        train_steps = len(self.train_loader)
+        early_stopping = EarlyStopping(patience=patience, verbose=verbose)
+
+        model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        
+        criterion = nn.MSELoss()
+
+        # if self.args.use_amp:
+        #     scaler = torch.cuda.amp.GradScaler()
+
+        setting = 'patience_{}_lr_{}_epochs_{}'.format(
+            patience,
+            learning_rate,
+            train_epochs
+        )
+        path = os.path.join(checkpoint_path, setting)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        for epoch in range(train_epochs):
+            iter_count = 0
+            train_loss = []
+
+            self.model.train()
+            epoch_time = time.time()
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.train_loader):
+                iter_count += 1
+                model_optim.zero_grad()
+                batch_x = batch_x.float().to(self.device) # [Batch_Size, Window, 1]
+                batch_y = batch_y.float().to(self.device) # [Batch_Size, Horizon, 1]
+                batch_x_mark = batch_x_mark.float().to(self.device) # [Batch_Size, Window, num_time_features]
+                batch_y_mark = batch_y_mark.float().to(self.device) # [Batch_Size, Horizon, num_time_features]
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
+                loss = criterion(outputs, batch_y)
+                train_loss.append(loss.item())
+
+                if (i + 1) % 100 == 0:
+                    print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                    speed = (time.time() - time_now) / iter_count
+                    left_time = speed * ((train_epochs - epoch) * train_steps - i)
+                    print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
+                    iter_count = 0
+                    time_now = time.time()
+
+                # if self.args.use_amp:
+                #     scaler.scale(loss).backward()
+                #     scaler.step(model_optim)
+                #     scaler.update()
+                # else:
+                loss.backward()
+                model_optim.step()
+
+            print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
+            train_loss = np.average(train_loss)
+            vali_loss = self.vali(self.val_loader, criterion)
+
+            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
+                epoch + 1, train_steps, train_loss, vali_loss))
+            early_stopping(vali_loss, self.model, path)
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+
+            adjust_learning_rate(model_optim, epoch + 1)
+
+        best_model_path = path + '/' + 'checkpoint.pth'
+        self.model.load_state_dict(torch.load(best_model_path))
+
+        return
