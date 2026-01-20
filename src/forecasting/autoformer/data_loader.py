@@ -42,7 +42,7 @@ class TrainDataset(data.Dataset):
         seq_x = data_window[s_begin:s_end]
         seq_x_mark = time_window[s_begin:s_end]
 
-        seq_y = data_window[r_begin:r_begin + self._label_len]
+        seq_y = data_window[r_begin:r_end]
         seq_y_mark = time_window[r_begin:r_end]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark

@@ -16,7 +16,7 @@ from forecasting.autoformer.data_loader import data_splitter
 PATH = "/Users/martin_martinez/ORT/Tesis/ute/final_datasets/residenciales/residenciales_complete_ids_only/"
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
-BATCH_SIZE = 32
+BATCH_SIZE = 100
 
 
 def main():
@@ -78,11 +78,11 @@ def main():
         label_len=label_len,
         pred_len=pred_len,
         output_attention=False,
-        device_name='mps' #mps for mac and cuda for gpu
+        device_name='cpu' #mps for mac and cuda for gpu
     )
     print("Starting training...")
     trainer.train(
-        patience=7,
+        patience=5,
         verbose=True,
         learning_rate=0.001,
         train_epochs=10
