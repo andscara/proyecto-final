@@ -26,6 +26,7 @@ class Trainer:
         self.pred_len = pred_len
         self.output_attention = output_attention
         self.device = torch.device(device_name)
+        self.model.to(self.device)
 
     def _predict(
         self,

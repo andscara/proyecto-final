@@ -78,7 +78,7 @@ def main():
         label_len=label_len,
         pred_len=pred_len,
         output_attention=False,
-        device_name='cpu' #mps for mac and cuda for gpu
+        device_name='mps' #mps for mac and cuda for gpu
     )
     print("Starting training...")
     trainer.train(
