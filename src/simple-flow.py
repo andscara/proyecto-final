@@ -1,19 +1,21 @@
 #type: ignore
 
+from tabnanny import check
 import time
 import duckdb as ddb
 from numpy import c_
 import pandas as pd
+import os
 
 from forecasting.autoformer.autoformer import Autoformer
-from forecasting.autoformer.data_loader import TestDataset, TrainDataset
+from forecasting.autoformer.data_loader import ValTestDataset, TrainDataset
 from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
 from forecasting.autoformer.data_loader import data_splitter
 
 
 
-PATH = "C:\\Users\\andres\\Documents\\ute\\cleanup\\res-outliers"
+PATH = "/Users/martin_martinez/ORT/Tesis/ute/final_datasets/residenciales/residenciales_complete_ids_only/"
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
 BATCH_SIZE = 64
@@ -34,20 +36,25 @@ def main():
     montevideo_data = ts_agg_departamento[ts_agg_departamento["departamento"] == "MONTEVIDEO"]
     # Train & Test DataLoader
     
-    train_dataset, test_dataset = data_splitter(
+    train_dataset, val_dataset, test_dataset = data_splitter(
         df=montevideo_data,
-        train_val_ratio=0.8,
-        test_ratio=0.2,
         windows_size=WINDOW_SIZE,
         horizon=HORIZON,
-        stride=24*3, # every 3 days
+        stride=24, # every day
         target_col_name="agg_valor",
-        scale=True
+        scale=False
     )
     train_dataloader = data.DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
+        drop_last=False
+    )
+
+    val_dataloader = data.DataLoader(
+        val_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
         drop_last=False
     )
 
@@ -74,18 +81,33 @@ def main():
     trainer = Trainer(
         model=model,
         train_loader=train_dataloader,
-        val_loader=test_dataloader,
+        val_loader=val_dataloader,
+        test_loader=test_dataloader,
         label_len=label_len,
         pred_len=pred_len,
         output_attention=False,
-        device_name='cuda' #mps for mac and cuda for gpu
+        device_name='cpu' #mps for mac and cuda for gpu
     )
     print("Starting training...")
+
+    checkpoint_path = "./checkpoints" 
+    patience = 5
+    lr = 0.001
+    train_epochs = 10
+    setting = 'patience_{}_lr_{}_epochs_{}'.format(
+        patience,
+        lr,
+        train_epochs
+    )
+    path = os.path.join(checkpoint_path, setting)
+    if not os.path.exists(path):
+        os.makedirs(path)
     trainer.train(
-        patience=5,
+        patience=patience,
         verbose=True,
-        learning_rate=0.001,
-        train_epochs=10
+        learning_rate=lr,
+        train_epochs=train_epochs,
+        checkpoint_path=path
     )
 
     ...

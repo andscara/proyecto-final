@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import torch
@@ -14,6 +15,7 @@ class Trainer:
         model: nn.Module,
         train_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
         val_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
+        test_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
         label_len: int,
         pred_len: int,
         output_attention: bool,
@@ -22,6 +24,7 @@ class Trainer:
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.test_loader = test_loader
         self.label_len = label_len
         self.pred_len = pred_len
         self.output_attention = output_attention
@@ -88,11 +91,11 @@ class Trainer:
 
     def train(
         self,
+        checkpoint_path: str,
         patience: int = 7,
         verbose: bool = True,
         learning_rate: float = 0.001,
         train_epochs: int = 10,
-        checkpoint_path: str = './checkpoints/',
     ):
         time_now = time.time()
 
@@ -106,14 +109,6 @@ class Trainer:
         # if self.args.use_amp:
         #     scaler = torch.cuda.amp.GradScaler()
 
-        setting = 'patience_{}_lr_{}_epochs_{}'.format(
-            patience,
-            learning_rate,
-            train_epochs
-        )
-        path = os.path.join(checkpoint_path, setting)
-        if not os.path.exists(path):
-            os.makedirs(path)
 
         for epoch in range(train_epochs):
             iter_count = 0
@@ -155,14 +150,53 @@ class Trainer:
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss))
-            early_stopping(vali_loss, self.model, path)
+            early_stopping(vali_loss, self.model, checkpoint_path)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
 
             adjust_learning_rate(model_optim, epoch + 1)
 
-        best_model_path = path + '/' + 'checkpoint.pth'
+        best_model_path = checkpoint_path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
         return
+    
+    def predict(
+        self, 
+        checkpoint_path: str,
+        load=False,
+    ):
+
+        if load:
+            best_model_path = checkpoint_path + '/' + 'checkpoint.pth'
+            logging.info(best_model_path)
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        preds = []
+
+        self.model.eval()
+        with torch.no_grad():
+            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
+                batch_x = batch_x.float().to(self.device)
+                batch_y = batch_y.float()
+                batch_x_mark = batch_x_mark.float().to(self.device)
+                batch_y_mark = batch_y_mark.float().to(self.device)
+
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
+                pred = outputs.detach().cpu().numpy()  # .squeeze()
+                preds.append(pred)
+
+        preds = np.array(preds)
+        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+
+        # result save
+        folder_path = './results/' + setting + '/'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        np.save(folder_path + 'real_prediction.npy', preds)
+
+        return
+
