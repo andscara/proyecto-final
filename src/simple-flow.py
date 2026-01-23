@@ -21,7 +21,9 @@ HORIZON = 24*7 # 1 week
 BATCH_SIZE = 64
 
 
-def main():
+def main(
+    train: bool = True
+):
     query = f"""
     select departamento, dia, hora, SUM(valor) as agg_valor
     from read_parquet('{PATH}')
@@ -83,17 +85,17 @@ def main():
         train_loader=train_dataloader,
         val_loader=val_dataloader,
         test_loader=test_dataloader,
+        seq_len=seq_len,
         label_len=label_len,
         pred_len=pred_len,
         output_attention=False,
         device_name='cpu' #mps for mac and cuda for gpu
     )
-    print("Starting training...")
 
     checkpoint_path = "./checkpoints" 
     patience = 5
-    lr = 0.001
-    train_epochs = 10
+    lr = 0.0001
+    train_epochs = 20
     setting = 'patience_{}_lr_{}_epochs_{}'.format(
         patience,
         lr,
@@ -102,15 +104,23 @@ def main():
     path = os.path.join(checkpoint_path, setting)
     if not os.path.exists(path):
         os.makedirs(path)
-    trainer.train(
-        patience=patience,
-        verbose=True,
-        learning_rate=lr,
-        train_epochs=train_epochs,
-        checkpoint_path=path
+    if train:
+        print("Starting training...")
+        trainer.train(
+            patience=patience,
+            verbose=True,
+            learning_rate=lr,
+            train_epochs=train_epochs,
+            checkpoint_path=path
+        )
+        print("Training finished.")
+    print("Starting testing...")
+    trainer.predict(
+        checkpoint_path=path,
+        load= not train
     )
 
-    ...
+
 
 if __name__ == "__main__":
-    main()
+    main(train=False)

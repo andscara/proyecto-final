@@ -1,12 +1,13 @@
+from curses import window
 import logging
-import os
 import time
 import torch
 import torch.nn as nn
 from torch.utils import data
 import numpy as np
-
 from forecasting.autoformer.tools import EarlyStopping, adjust_learning_rate
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 class Trainer:
@@ -16,6 +17,7 @@ class Trainer:
         train_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
         val_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
         test_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
+        seq_len: int,
         label_len: int,
         pred_len: int,
         output_attention: bool,
@@ -25,6 +27,7 @@ class Trainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
+        self.seq_len = seq_len
         self.label_len = label_len
         self.pred_len = pred_len
         self.output_attention = output_attention
@@ -165,7 +168,7 @@ class Trainer:
     def predict(
         self, 
         checkpoint_path: str,
-        load=False,
+        load: bool = False
     ):
 
         if load:
@@ -174,6 +177,7 @@ class Trainer:
             self.model.load_state_dict(torch.load(best_model_path))
 
         preds = []
+        timestamps = []
 
         self.model.eval()
         with torch.no_grad():
@@ -185,18 +189,39 @@ class Trainer:
 
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
-                pred = outputs.detach().cpu().numpy()  # .squeeze()
-                preds.append(pred)
+                x_hist = batch_x.detach().cpu().numpy()     # (B, seq_len, 1)
+                y_pred = outputs.detach().cpu().numpy()     # (B, pred_len, 1)
+
+                full_series = np.concatenate([x_hist, y_pred], axis=1)
+                preds.append(full_series)
+                window_timestamps = batch_x_mark.detach().cpu().numpy()
+                pred_timestamps = batch_y_mark.detach().cpu().numpy()
+                # full_timestamps = np.concatenate([window_timestamps, pred_timestamps], axis=1)
+                timestamps.append(window_timestamps)
 
         preds = np.array(preds)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
 
-        # result save
-        folder_path = './results/' + setting + '/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+        timestamps = np.array(timestamps)
+        timestamps = timestamps.reshape(-1, timestamps.shape[-2], timestamps.shape[-1])
 
-        np.save(folder_path + 'real_prediction.npy', preds)
+        print(f"Shape of predictions: {preds.shape}")
+        print(f"Shape of timestamps: {timestamps.shape}")
 
-        return
+
+        # # result save
+        # folder_path = './results/' + checkpoint_path + '/'
+        # if not os.path.exists(folder_path):
+        #     os.makedirs(folder_path)
+
+        # np.save(folder_path + 'real_prediction.npy', preds)
+
+        plots_paths = './results/' + checkpoint_path + '/' + 'graficas.pdf'
+
+        with PdfPages(plots_paths) as pdf:
+            for i in range(len(preds)):
+                plt.plot(preds[i][:self.seq_len], label="Historia", color="blue")
+                plt.plot(range(self.seq_len, len(preds[i])), preds[i][self.seq_len:], label="Predicción", color="orange")
+                pdf.savefig()
+                plt.close()
 
