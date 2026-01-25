@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy.typing as npt
 from datetime import datetime, timedelta
+import torch.nn.functional as F
 
 class Trainer:
     def __init__(
@@ -189,18 +190,30 @@ class Trainer:
         preds = []
         timestamps = []
         real_ys = []
+        global_errors = []
+
 
         self.model.eval()
         with torch.no_grad():
             self.test_loader.dataset.predicting = True
-            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark, real_y)) in enumerate(self.test_loader):
+            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark, real_y) in enumerate(self.test_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float()
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
-
-
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
+
+                mse_per_item = F.mse_loss(
+                    batch_y,
+                    real_y,
+                    reduction='none'
+                ).mean(dim=(1, 2))
+
+                for error in mse_per_item:
+                    global_errors.append(error.item())
+
+
 
                 x_hist = batch_x.detach().cpu().numpy()     # (B, seq_len, 1)
                 x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
@@ -211,18 +224,12 @@ class Trainer:
                 real_y = self._inverse_scale(real_y, self.test_loader.dataset.scaler)
                 real_ys.append(real_y)
 
-                # print(f"Shape of x_hist: {x_hist.shape}")
-                # print(f"Shape of y_pred: {y_pred.shape}")
 
                 full_series = np.concatenate([x_hist, y_pred], axis=1)
                 preds.append(full_series)
                 window_timestamps = batch_x_mark.detach().cpu().numpy()
                 pred_timestamps = batch_y_mark.detach().cpu().numpy()
-                # print(f"Window timestamps shape: {window_timestamps.shape}")
-                # print(f"Prediction timestamps shape: {pred_timestamps.shape}")
-                # Concatenate timestamps of x and the last part (pred_len) of y
                 full_timestamps = np.concatenate([window_timestamps, pred_timestamps[:, -self.pred_len:, :]], axis=1)
-                # full_timestamps = np.concatenate([window_timestamps, pred_timestamps], axis=1)
                 timestamps.append(full_timestamps)
 
         preds = np.array(preds)
@@ -240,6 +247,8 @@ class Trainer:
 
         plots_paths = './results/' + checkpoint_path + '/' + 'graficas.pdf'
 
+
+
         with PdfPages(plots_paths) as pdf:
             for i in range(len(preds)):
                 start_datetime = datetime(2000, int(timestamps[i][0][0]), int(timestamps[i][0][1]), int(timestamps[i][0][3]))  # Dummy year
@@ -248,6 +257,17 @@ class Trainer:
                 plt.plot(dates[self.seq_len:], preds[i][self.seq_len:], label="Predicción", color="orange")
                 plt.plot(dates[self.seq_len:], real_ys[i], label="Real", color="green", linestyle='dashed')
                 plt.xticks(dates[::112])
+                plt.text(
+                    0.99, 0.01,
+                    f'Window Error (MSE): {global_errors[i]:.4f}',
+                    transform=plt.gca().transAxes,
+                    fontsize=10,
+                    ha='right',
+                    va='bottom'
+                )
                 pdf.savefig()
                 plt.close()
+
+        mean_global_error = np.mean(global_errors)
+        print(f"Global Error (MSE): {mean_global_error}")
 
