@@ -44,7 +44,7 @@ def main(
         horizon=HORIZON,
         stride=24, # every day
         target_col_name="agg_valor",
-        scale=False
+        scale=True
     )
     train_dataloader = data.DataLoader(
         train_dataset,
@@ -123,4 +123,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False)
+    main(train=True)
