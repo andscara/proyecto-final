@@ -208,6 +208,8 @@ class Trainer:
                 preds.append(full_series)
                 window_timestamps = batch_x_mark.detach().cpu().numpy()
                 pred_timestamps = batch_y_mark.detach().cpu().numpy()
+                print(f"Window timestamps shape: {window_timestamps.shape}")
+                print(f"Prediction timestamps shape: {pred_timestamps.shape}")
                 # full_timestamps = np.concatenate([window_timestamps, pred_timestamps], axis=1)
                 timestamps.append(window_timestamps)
 
