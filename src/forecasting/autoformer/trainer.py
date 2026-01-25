@@ -188,14 +188,17 @@ class Trainer:
 
         preds = []
         timestamps = []
+        real_ys = []
 
         self.model.eval()
         with torch.no_grad():
-            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
+            self.test_loader.dataset.predicting = True
+            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark, real_y)) in enumerate(self.test_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float()
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
+
 
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
@@ -203,6 +206,10 @@ class Trainer:
                 x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
                 y_pred = outputs.detach().cpu().numpy()     # (B, pred_len, 1)
                 y_pred = self._inverse_scale(y_pred, self.test_loader.dataset.scaler)
+            
+                real_y = real_y.detach().cpu().numpy()       # (B, pred_len, 1)
+                real_y = self._inverse_scale(real_y, self.test_loader.dataset.scaler)
+                real_ys.append(real_y)
 
                 # print(f"Shape of x_hist: {x_hist.shape}")
                 # print(f"Shape of y_pred: {y_pred.shape}")
@@ -221,20 +228,15 @@ class Trainer:
         preds = np.array(preds)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
 
+        real_ys = np.array(real_ys)
+        real_ys = real_ys.reshape(-1, real_ys.shape[-2], real_ys.shape[-1])
+
         timestamps = np.array(timestamps)
         timestamps = timestamps.reshape(-1, timestamps.shape[-2], timestamps.shape[-1])
 
         print(f"Shape of predictions: {preds.shape}")
         print(f"Shape of timestamps: {timestamps.shape}")
         print(f"First timestamp example: {timestamps[0]}")
-
-
-        # # result save
-        # folder_path = './results/' + checkpoint_path + '/'
-        # if not os.path.exists(folder_path):
-        #     os.makedirs(folder_path)
-
-        # np.save(folder_path + 'real_prediction.npy', preds)
 
         plots_paths = './results/' + checkpoint_path + '/' + 'graficas.pdf'
 
@@ -244,6 +246,7 @@ class Trainer:
                 dates = [start_datetime + timedelta(hours=j) for j in range(len(preds[i]))]
                 plt.plot(dates[:self.seq_len], preds[i][:self.seq_len], label="Historia", color="blue")
                 plt.plot(dates[self.seq_len:], preds[i][self.seq_len:], label="Predicción", color="orange")
+                plt.plot(dates[self.seq_len:], real_ys[i], label="Real", color="green", linestyle='dashed')
                 plt.xticks(dates[::112])
                 pdf.savefig()
                 plt.close()

@@ -67,6 +67,7 @@ class ValTestDataset(data.Dataset):
         self._label_len = label_len
         self._pred_len = pred_len
         self.scaler = scaler
+        self.predicting = False
 
     def __len__(self) -> int:
         return len(self.data_windows)
@@ -87,7 +88,11 @@ class ValTestDataset(data.Dataset):
         seq_x_mark = time[s_begin:s_end]                # (seq_len, T)
         seq_y_mark = time[r_begin:r_end]                # (label_len+pred_len, T)
 
-        return seq_x, seq_y, seq_x_mark, seq_y_mark
+        if self.predicting:
+            pred_y = data[r_begin + self._label_len:r_end]  # (pred_len, 1)
+            return seq_x, seq_y, seq_x_mark, seq_y_mark, pred_y
+        else:
+            return seq_x, seq_y, seq_x_mark, seq_y_mark
 
 def create_windows(
     df: pd.DataFrame,
