@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 import numpy as np
-from forecasting.autoformer.tools import EarlyStopping, adjust_learning_rate
+from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_learning_rate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import numpy.typing as npt
 
 
 class Trainer:
@@ -162,7 +163,17 @@ class Trainer:
         best_model_path = checkpoint_path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
-        return
+    def _inverse_scale(
+        self,
+        data: npt.NDArray[np.float32],          # (B, T, 1)
+        scaler: StandardScaler | None
+    ) -> npt.NDArray[np.float32]:
+        if scaler is None:
+            return data
+        B, T, C = data.shape
+        data_2d = data.reshape(-1, C)      # (B*T, 1)
+        data_2d = scaler.inverse_transform(data_2d)
+        return data_2d.reshape(B, T, C)
     
     def predict(
         self, 
@@ -189,7 +200,9 @@ class Trainer:
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
                 x_hist = batch_x.detach().cpu().numpy()     # (B, seq_len, 1)
+                x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
                 y_pred = outputs.detach().cpu().numpy()     # (B, pred_len, 1)
+                y_pred = self._inverse_scale(y_pred, self.train_loader.dataset.scaler)
 
                 full_series = np.concatenate([x_hist, y_pred], axis=1)
                 preds.append(full_series)
