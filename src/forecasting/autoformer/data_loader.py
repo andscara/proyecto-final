@@ -110,11 +110,12 @@ def create_windows(
     # df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1) -> already exists in the dataframe
     df["timestamp"] = pd.to_datetime(df["dia"]) + pd.to_timedelta(df["hora"] - 1, unit="h")
     df_stamp = df[['timestamp']]
+    df_stamp['month'] = df_stamp.timestamp.apply(lambda row: row.month, 1)
     df_stamp['day'] = df_stamp.timestamp.apply(lambda row: row.day, 1)
     df_stamp['weekday'] = df_stamp.timestamp.apply(lambda row: row.weekday(), 1)
     df_stamp['hour'] = df_stamp.timestamp.apply(lambda row: row.hour, 1)
-    df_stamp['minute'] = df_stamp.timestamp.apply(lambda row: row.minute, 1)
-    df_stamp['minute'] = df_stamp.minute.map(lambda x: x // 15)
+    # df_stamp['minute'] = df_stamp.timestamp.apply(lambda row: row.minute, 1)
+    # df_stamp['minute'] = df_stamp.minute.map(lambda x: x // 15)
     data_stamp = df_stamp.drop(columns=['timestamp'], axis=1).values
     # Calculate all  windows based on window_size, horizon and stride
     data_windows: list[NDArray[Any]] = []

@@ -204,14 +204,19 @@ class Trainer:
                 y_pred = outputs.detach().cpu().numpy()     # (B, pred_len, 1)
                 y_pred = self._inverse_scale(y_pred, self.train_loader.dataset.scaler)
 
+                # print(f"Shape of x_hist: {x_hist.shape}")
+                # print(f"Shape of y_pred: {y_pred.shape}")
+
                 full_series = np.concatenate([x_hist, y_pred], axis=1)
                 preds.append(full_series)
                 window_timestamps = batch_x_mark.detach().cpu().numpy()
                 pred_timestamps = batch_y_mark.detach().cpu().numpy()
-                print(f"Window timestamps shape: {window_timestamps.shape}")
-                print(f"Prediction timestamps shape: {pred_timestamps.shape}")
+                # print(f"Window timestamps shape: {window_timestamps.shape}")
+                # print(f"Prediction timestamps shape: {pred_timestamps.shape}")
+                # Concatenate timestamps of x and the last part (pred_len) of y
+                full_timestamps = np.concatenate([window_timestamps, pred_timestamps[:, -self.pred_len:, :]], axis=1)
                 # full_timestamps = np.concatenate([window_timestamps, pred_timestamps], axis=1)
-                timestamps.append(window_timestamps)
+                timestamps.append(full_timestamps)
 
         preds = np.array(preds)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
@@ -221,6 +226,7 @@ class Trainer:
 
         print(f"Shape of predictions: {preds.shape}")
         print(f"Shape of timestamps: {timestamps.shape}")
+        print(f"First timestamp example: {timestamps[0]}")
 
 
         # # result save
