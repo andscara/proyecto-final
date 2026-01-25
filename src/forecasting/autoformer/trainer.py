@@ -8,7 +8,7 @@ from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_l
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy.typing as npt
-
+from datetime import datetime, timedelta
 
 class Trainer:
     def __init__(
@@ -202,7 +202,7 @@ class Trainer:
                 x_hist = batch_x.detach().cpu().numpy()     # (B, seq_len, 1)
                 x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
                 y_pred = outputs.detach().cpu().numpy()     # (B, pred_len, 1)
-                y_pred = self._inverse_scale(y_pred, self.train_loader.dataset.scaler)
+                y_pred = self._inverse_scale(y_pred, self.test_loader.dataset.scaler)
 
                 # print(f"Shape of x_hist: {x_hist.shape}")
                 # print(f"Shape of y_pred: {y_pred.shape}")
@@ -240,8 +240,11 @@ class Trainer:
 
         with PdfPages(plots_paths) as pdf:
             for i in range(len(preds)):
-                plt.plot(preds[i][:self.seq_len], label="Historia", color="blue")
-                plt.plot(range(self.seq_len, len(preds[i])), preds[i][self.seq_len:], label="Predicción", color="orange")
+                start_datetime = datetime(2000, int(timestamps[i][0][0]), int(timestamps[i][0][1]), int(timestamps[i][0][3]))  # Dummy year
+                dates = [start_datetime + timedelta(hours=j) for j in range(len(preds[i]))]
+                plt.plot(dates[:self.seq_len], preds[i][:self.seq_len], label="Historia", color="blue")
+                plt.plot(dates[self.seq_len:], preds[i][self.seq_len:], label="Predicción", color="orange")
+                plt.xticks(dates[::112])
                 pdf.savefig()
                 plt.close()
 

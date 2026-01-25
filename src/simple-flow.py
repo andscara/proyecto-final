@@ -123,4 +123,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=True)
+    main(train=False)
