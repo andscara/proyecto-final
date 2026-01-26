@@ -192,28 +192,25 @@ class Trainer:
         real_ys = []
         global_errors = []
 
-
         self.model.eval()
         with torch.no_grad():
+            criterion = nn.MSELoss()
             self.test_loader.dataset.predicting = True
             for _, (batch_x, batch_y, batch_x_mark, batch_y_mark, real_y) in enumerate(self.test_loader):
                 batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float()
+                batch_y = batch_y.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
-
                 mse_per_item = F.mse_loss(
+                    outputs,
                     batch_y,
-                    real_y,
                     reduction='none'
                 ).mean(dim=(1, 2))
 
                 for error in mse_per_item:
                     global_errors.append(error.item())
-
-
 
                 x_hist = batch_x.detach().cpu().numpy()     # (B, seq_len, 1)
                 x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
@@ -245,7 +242,8 @@ class Trainer:
         print(f"Shape of timestamps: {timestamps.shape}")
         print(f"First timestamp example: {timestamps[0]}")
 
-        plots_paths = './results/' + checkpoint_path + '/' + 'graficas.pdf'
+        #plots_paths = './results/' + checkpoint_path + '/' + 'graficas.pdf'
+        plots_paths = 'graficas.pdf'
 
 
 

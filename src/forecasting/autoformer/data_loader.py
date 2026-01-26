@@ -84,6 +84,7 @@ class ValTestDataset(data.Dataset):
 
         seq_x = data[s_begin:s_end]                     # (seq_len, 1)
         seq_y = data[r_begin:r_begin + self._label_len] # (label_len, 1)
+        #seq_y = data[r_begin:r_end]
 
         seq_x_mark = time[s_begin:s_end]                # (seq_len, T)
         seq_y_mark = time[r_begin:r_end]                # (label_len+pred_len, T)
@@ -194,7 +195,7 @@ def data_splitter(
         val_data_windows.append(val_test_data_windows[idx])
         val_data_time_features_windows.append(val_test_time_features_windows[idx])
 
-    val_dataset = ValTestDataset(
+    val_dataset = TrainDataset(
         data_windows=val_data_windows,
         time_features_windows=val_data_time_features_windows,
         seq_len=seq_len,

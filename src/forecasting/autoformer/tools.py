@@ -29,9 +29,11 @@ def adjust_learning_rate(
             2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6,
             10: 5e-7, 15: 1e-7, 20: 5e-8
         }
-    return
+
     if epoch in lr_adjust.keys():
         lr = lr_adjust[epoch]
+        if lr < 1.25e-05:
+            lr = 1.25e-05
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         print('Updating learning rate to {}'.format(lr))
