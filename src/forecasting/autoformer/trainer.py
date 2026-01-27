@@ -37,14 +37,17 @@ class Trainer:
 
     def _predict(
         self,
-        batch_x: torch.Tensor, 
-        batch_y: torch.Tensor, 
-        batch_x_mark: torch.Tensor, 
+        batch_x: torch.Tensor,
+        batch_y: torch.Tensor,
+        batch_x_mark: torch.Tensor,
         batch_y_mark: torch.Tensor
     ):
         # decoder input
-        dec_inp = torch.zeros_like(batch_y[:, -self.pred_len:, :]).float()
-        dec_inp = torch.cat([batch_y[:, :self.label_len, :], dec_inp], dim=1).float().to(self.device)
+        # Zero out only the target variable (first column) for future predictions
+        # Keep exogenous features (remaining columns) from batch_y
+        dec_inp_future = batch_y[:, -self.pred_len:, :].clone().float()
+        dec_inp_future[:, :, 0] = 0  # Zero only the target variable (first column)
+        dec_inp = torch.cat([batch_y[:, :self.label_len, :], dec_inp_future], dim=1).float().to(self.device)
         # encoder - decoder
 
         def _run_model():
@@ -59,10 +62,11 @@ class Trainer:
         # else:
         outputs = _run_model()
 
-        # f_dim = -1 if self.args.features == 'MS' else 0
-        f_dim = 0
-        outputs = outputs[:, -self.pred_len:, f_dim:]
-        batch_y = batch_y[:, -self.pred_len:, f_dim:].to(self.device)
+        # Extract only the target variable (first column) for comparison
+        # Model outputs only c_out=1 (target), so outputs shape is (B, pred_len, 1)
+        # batch_y may have multiple features, so extract only the first one (target)
+        outputs = outputs[:, -self.pred_len:, :]  # Model already outputs only target
+        batch_y = batch_y[:, -self.pred_len:, 0:1].to(self.device)  # Extract only target from batch_y
 
         return outputs, batch_y
     

@@ -101,11 +101,19 @@ def create_windows(
     horizon: int,
     stride: int,
     target_col_name: str,
-    scale: bool
-) -> tuple[list[NDArray[Any]], list[NDArray[Any]], StandardScaler | None]: 
+    scale: bool,
+    exog_cols: list[str] | None = None
+) -> tuple[list[NDArray[Any]], list[NDArray[Any]], StandardScaler | None]:
     # Scale the dataset if needed
     data: NDArray[Any]
-    only_data_df = df[[target_col_name]]
+
+    # Determine which columns to include
+    if exog_cols is None:
+        data_cols = [target_col_name]
+    else:
+        data_cols = [target_col_name] + exog_cols
+
+    only_data_df = df[data_cols]
     if scale:
         scaler = StandardScaler()
         scaler.fit(only_data_df.values)
@@ -139,7 +147,8 @@ def data_splitter(
     stride: int,
     target_col_name: str,
     scale: bool = True,
-    windows_to_test: int = 20
+    windows_to_test: int = 20,
+    exog_cols: list[str] | None = None
 ) -> tuple[TrainDataset, ValTestDataset, ValTestDataset]:
     # Divide the dataframe [start_train, end_train], [end_df_minus_1_year, end_df]
     train_df = df[df['dia'] <  pd.Timestamp('2024-09-01')]
@@ -151,7 +160,8 @@ def data_splitter(
         horizon=horizon,
         stride=stride,
         target_col_name=target_col_name,
-        scale=scale
+        scale=scale,
+        exog_cols=exog_cols
     )
 
     val_test_data_windows, val_test_time_features_windows, val_test_scaler = create_windows(
@@ -160,7 +170,8 @@ def data_splitter(
         horizon=horizon,
         stride=stride,
         target_col_name=target_col_name,
-        scale=scale
+        scale=scale,
+        exog_cols=exog_cols
     )
 
     seq_len = windows_size

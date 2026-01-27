@@ -44,7 +44,8 @@ def main(
         horizon=HORIZON,
         stride=24, # every day
         target_col_name="agg_valor",
-        scale=True
+        scale=True,
+        exog_cols=["temperatura"]
     )
     train_dataloader = data.DataLoader(
         train_dataset,
@@ -77,8 +78,8 @@ def main(
         label_len=label_len,
         pred_len=pred_len,
         c_out=1,
-        enc_in=1,
-        dec_in=1
+        enc_in=2,  # target + temperatura
+        dec_in=2   # target + temperatura
     )
     trainer = Trainer(
         model=model,
