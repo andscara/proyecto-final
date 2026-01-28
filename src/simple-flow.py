@@ -8,14 +8,12 @@ import pandas as pd
 import os
 
 from forecasting.autoformer.autoformer import Autoformer
-from forecasting.autoformer.data_loader import ValTestDataset, TrainDataset
 from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
 from forecasting.autoformer.data_loader import data_splitter
 
 
-
-PATH = r"C:\Users\andres\Documents\ute\cleanup\res-outliers"
+PATH = "/Users/martin_martinez/ORT/Tesis/ute/res-outliers"
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
 BATCH_SIZE = 64
@@ -38,7 +36,7 @@ def main(
     montevideo_data = ts_agg_departamento[ts_agg_departamento["departamento"] == "MONTEVIDEO"]
     # Train & Test DataLoader
     
-    train_dataset, val_dataset, test_dataset = data_splitter(
+    all_dataset, train_dataset, val_dataset, test_dataset = data_splitter(
         df=montevideo_data,
         windows_size=WINDOW_SIZE,
         horizon=HORIZON,
@@ -46,6 +44,7 @@ def main(
         target_col_name="agg_valor",
         scale=True
     )
+
     train_dataloader = data.DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
@@ -82,6 +81,8 @@ def main(
     )
     trainer = Trainer(
         model=model,
+        window_stride_in_days=1,
+        all_dataset=all_dataset,
         train_loader=train_dataloader,
         val_loader=val_dataloader,
         test_loader=test_dataloader,
@@ -89,7 +90,7 @@ def main(
         label_len=label_len,
         pred_len=pred_len,
         output_attention=False,
-        device_name='cuda' #mps for mac and cuda for gpu
+        device_name='cpu' #mps for mac and cuda for gpu
     )
 
     checkpoint_path = "./checkpoints" 
