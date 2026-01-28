@@ -10,6 +10,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy.typing as npt
 from datetime import datetime, timedelta
 import torch.nn.functional as F
+from pathlib import Path
 
 class Trainer:
     def __init__(
@@ -99,7 +100,7 @@ class Trainer:
 
     def train(
         self,
-        checkpoint_path: str,
+        checkpoint_path: Path,
         patience: int = 7,
         verbose: bool = True,
         learning_rate: float = 0.001,
@@ -181,8 +182,8 @@ class Trainer:
         return data_2d.reshape(B, T, C)
     
     def predict(
-        self, 
-        checkpoint_path: str,
+        self,
+        checkpoint_path: Path,
         load: bool = False
     ):
 

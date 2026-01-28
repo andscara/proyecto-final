@@ -12,6 +12,7 @@ from forecasting.autoformer.data_loader import ValTestDataset, TrainDataset
 from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
 from forecasting.autoformer.data_loader import data_splitter
+from pathlib import Path
 
 
 
@@ -44,8 +45,7 @@ def main(
         horizon=HORIZON,
         stride=24, # every day
         target_col_name="agg_valor",
-        scale=True,
-        exog_cols=["temperatura"]
+        scale=True
     )
     train_dataloader = data.DataLoader(
         train_dataset,
@@ -78,8 +78,8 @@ def main(
         label_len=label_len,
         pred_len=pred_len,
         c_out=1,
-        enc_in=2,  # target + temperatura
-        dec_in=2   # target + temperatura
+        enc_in=1,
+        dec_in=1
     )
     trainer = Trainer(
         model=model,
@@ -93,7 +93,7 @@ def main(
         device_name='cuda' #mps for mac and cuda for gpu
     )
 
-    checkpoint_path = "./checkpoints" 
+    checkpoint_path = Path("checkpoints")
     patience = 5
     lr = 0.0001
     train_epochs = 20
@@ -102,7 +102,7 @@ def main(
         lr,
         train_epochs
     )
-    path = os.path.join(checkpoint_path, setting)
+    path = checkpoint_path / setting
     if not os.path.exists(path):
         os.makedirs(path)
     if train:

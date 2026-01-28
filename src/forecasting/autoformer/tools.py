@@ -3,6 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 from typing import TypeVar, Generic, Iterator, overload
+from pathlib import Path
 
 plt.switch_backend('agg')
 
@@ -78,7 +79,7 @@ class EarlyStopping:
         self, 
         val_loss: float, 
         model: torch.nn.Module, 
-        path: str
+        path: Path
     ):
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
