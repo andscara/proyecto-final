@@ -10,7 +10,7 @@ import numpy as np
 
 from runner import train
 
-class TrainDataset(data.Dataset):
+class WindowsDataset(data.Dataset):
     def __init__(
         self,
         data_windows: list[NDArray[Any]],
@@ -49,51 +49,6 @@ class TrainDataset(data.Dataset):
         seq_y_mark = time_window[r_begin:r_end]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark
-
-class ValTestDataset(data.Dataset):
-    def __init__(
-        self,
-        data_windows: list[NDArray[np.float32]],
-        time_features_windows: list[NDArray[np.float32]],
-        seq_len: int,
-        label_len: int,
-        pred_len: int,
-        scaler: StandardScaler | None
-    ):
-        super().__init__()
-        self.data_windows = data_windows
-        self.time_windows = time_features_windows
-        self._seq_len = seq_len
-        self._label_len = label_len
-        self._pred_len = pred_len
-        self.scaler = scaler
-        self.predicting = False
-
-    def __len__(self) -> int:
-        return len(self.data_windows)
-
-    def __getitem__(self, index: int):
-        data = self.data_windows[index]
-        time = self.time_windows[index]
-
-        s_begin = 0
-        s_end = self._seq_len
-
-        r_begin = s_end - self._label_len
-        r_end = r_begin + self._label_len + self._pred_len
-
-        seq_x = data[s_begin:s_end]                     # (seq_len, 1)
-        seq_y = data[r_begin:r_begin + self._label_len] # (label_len, 1)
-        #seq_y = data[r_begin:r_end]
-
-        seq_x_mark = time[s_begin:s_end]                # (seq_len, T)
-        seq_y_mark = time[r_begin:r_end]                # (label_len+pred_len, T)
-
-        if self.predicting:
-            pred_y = data[r_begin + self._label_len:r_end]  # (pred_len, 1)
-            return seq_x, seq_y, seq_x_mark, seq_y_mark, pred_y
-        else:
-            return seq_x, seq_y, seq_x_mark, seq_y_mark
 
 def create_windows(
     df: pd.DataFrame,
@@ -149,7 +104,29 @@ def data_splitter(
     scale: bool = True,
     windows_to_test: int = 20,
     exog_cols: list[str] | None = None
-) -> tuple[TrainDataset, ValTestDataset, ValTestDataset]:
+) -> tuple[WindowsDataset, WindowsDataset, WindowsDataset, WindowsDataset]:
+    all_data_windows, all_time_features_windows, all_scaler = create_windows(
+        df=df,
+        windows_size=windows_size,
+        horizon=horizon,
+        stride=stride,
+        target_col_name=target_col_name,
+        scale=scale
+    )
+
+    seq_len = windows_size
+    label_len = windows_size // 2
+    pred_len = horizon
+
+    all_dataset = WindowsDataset(
+        data_windows=all_data_windows,
+        time_features_windows=all_time_features_windows,
+        seq_len=seq_len,
+        label_len=label_len,
+        pred_len=pred_len,
+        scaler=all_scaler
+    )
+
     # Divide the dataframe [start_train, end_train], [end_df_minus_1_year, end_df]
     train_df = df[df['dia'] <  pd.Timestamp('2024-09-01')]
     val_test_df = df[df['dia'] >= pd.Timestamp('2024-09-01')]
@@ -174,12 +151,8 @@ def data_splitter(
         exog_cols=exog_cols
     )
 
-    seq_len = windows_size
-    label_len = windows_size // 2
-    pred_len = horizon
-
     #Create Datasets
-    train_dataset = TrainDataset(
+    train_dataset = WindowsDataset(
         data_windows=train_data_windows,
         time_features_windows=train_time_features_windows,
         seq_len=seq_len,
@@ -193,9 +166,10 @@ def data_splitter(
     
     assert windows_to_test < all_val_test_windows_count, "The number of windows to test must be less than the total number of windows available for validation and testing."
 
+    rng = np.random.default_rng(seed=42)
     all_indexes = np.arange(all_val_test_windows_count)
 
-    val_indexes = np.random.choice(
+    val_indexes = rng.choice(
         all_indexes,
         size=int(all_val_test_windows_count - windows_to_test),
         replace=False
@@ -206,7 +180,7 @@ def data_splitter(
         val_data_windows.append(val_test_data_windows[idx])
         val_data_time_features_windows.append(val_test_time_features_windows[idx])
 
-    val_dataset = TrainDataset(
+    val_dataset = WindowsDataset(
         data_windows=val_data_windows,
         time_features_windows=val_data_time_features_windows,
         seq_len=seq_len,
@@ -227,7 +201,7 @@ def data_splitter(
         test_time_features_windows.append(val_test_time_features_windows[idx])
 
 
-    test_dataset = ValTestDataset(
+    test_dataset = WindowsDataset(
         data_windows=test_data_windows,
         time_features_windows=test_time_features_windows,
         seq_len=seq_len,
@@ -235,6 +209,6 @@ def data_splitter(
         pred_len=pred_len,
         scaler=val_test_scaler
     )
-    return train_dataset, val_dataset, test_dataset
+    return all_dataset, train_dataset, val_dataset, test_dataset
 
     

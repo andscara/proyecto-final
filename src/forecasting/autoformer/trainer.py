@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 import numpy as np
+from forecasting.autoformer.data_loader import WindowsDataset
 from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_learning_rate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -16,6 +17,8 @@ class Trainer:
     def __init__(
         self,
         model: nn.Module,
+        window_stride_in_days: int,
+        all_dataset: WindowsDataset,
         train_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
         val_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
         test_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
@@ -26,6 +29,8 @@ class Trainer:
         device_name: str = 'cpu',
     ):
         self.model = model
+        self.window_stride_in_days = window_stride_in_days
+        self.all_dataset = all_dataset
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
@@ -166,7 +171,7 @@ class Trainer:
 
             adjust_learning_rate(model_optim, epoch + 1)
 
-        best_model_path = checkpoint_path + '/' + 'checkpoint.pth'
+        best_model_path = checkpoint_path / 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
     def _inverse_scale(
@@ -188,7 +193,7 @@ class Trainer:
     ):
 
         if load:
-            best_model_path = checkpoint_path + '/' + 'checkpoint.pth'
+            best_model_path = checkpoint_path / 'checkpoint.pth'
             logging.info(best_model_path)
             self.model.load_state_dict(torch.load(best_model_path))
 
@@ -200,8 +205,8 @@ class Trainer:
         self.model.eval()
         with torch.no_grad():
             criterion = nn.MSELoss()
-            self.test_loader.dataset.predicting = True
-            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark, real_y) in enumerate(self.test_loader):
+            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
+                real_y = batch_y[:, -self.pred_len:, :]
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
@@ -247,12 +252,59 @@ class Trainer:
         print(f"Shape of timestamps: {timestamps.shape}")
         print(f"First timestamp example: {timestamps[0]}")
 
-        #plots_paths = './results/' + checkpoint_path + '/' + 'graficas.pdf'
-        plots_paths = 'graficas.pdf'
-
-
+        plots_paths = Path('results') / checkpoint_path  / 'graficas.pdf'
+        plots_paths.parent.mkdir(parents=True, exist_ok=True)
 
         with PdfPages(plots_paths) as pdf:
+            y_preds = []
+            y_reals = []
+
+            for start_index in range(0, len(self.all_dataset), 1):
+                batch_x, batch_y, batch_x_mark, batch_y_mark = self.all_dataset.__getitem__(start_index)
+                real_y = batch_y[-self.pred_len:, :]
+                #Add batch dimension
+                batch_x = torch.tensor(batch_x)
+                batch_x = batch_x.unsqueeze(0)
+                batch_y = torch.tensor(batch_y)
+                batch_y = batch_y.unsqueeze(0)
+                batch_x_mark = torch.tensor(batch_x_mark)
+                batch_x_mark = batch_x_mark.unsqueeze(0)
+                batch_y_mark = torch.tensor(batch_y_mark)
+                batch_y_mark = batch_y_mark.unsqueeze(0)
+                batch_x = batch_x.float().to(self.device)
+                batch_y = batch_y.float().to(self.device)
+                batch_x_mark = batch_x_mark.float().to(self.device)
+                batch_y_mark = batch_y_mark.float().to(self.device)
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
+                #Remove batch dimension because we are predicting one by one
+                #outputs = outputs.squeeze(0)
+                #batch_y = batch_y.squeeze(0)
+
+                y_pred = outputs.detach().cpu().numpy()     # (pred_len, 1)
+                y_pred = self._inverse_scale(y_pred, self.all_dataset.scaler)
+                y_preds.append(y_pred[0,0:24])
+                # real_y = real_y.detach().cpu().numpy()       # (pred_len, 1)
+                real_y = self._inverse_scale(real_y[np.newaxis, :, :], self.all_dataset.scaler)
+                y_reals.append(real_y[0,0:24])
+
+                # plt.plot(real_y[0], label="Real", color="blue")
+                # plt.plot(y_pred[0], label="Predicción", color="green", linestyle='dashed', alpha=0.5)
+                # pdf.savefig()
+                # plt.close()
+
+            y_preds = np.array(y_preds).flatten()
+            y_reals = np.array(y_reals).flatten()
+            
+            plt.plot(y_reals, label="Real", color="blue")
+            plt.plot(y_preds, label="Predicción", color="green", linestyle='dashed', alpha=0.5)
+            pdf.savefig()
+            plt.close()
+
+
+            
+
+            # Generate plots for each prediction in Test set
             for i in range(len(preds)):
                 start_datetime = datetime(2000, int(timestamps[i][0][0]), int(timestamps[i][0][1]), int(timestamps[i][0][3]))  # Dummy year
                 dates = [start_datetime + timedelta(hours=j) for j in range(len(preds[i]))]
