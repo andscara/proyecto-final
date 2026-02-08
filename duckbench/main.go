@@ -67,7 +67,7 @@ var cleanupResidencialesPath = "C:\\Users\\andres\\Documents\\ute\\processed\\re
 var analisisResidencialesDuckDbFilePath = "C:\\Users\\andres\\Documents\\analisis"
 var residencialesDuckDbFilePath = "C:\\Users\\andres\\Documents\\test-data"
 var customersBatch = 5000
-var singleBatchExecution = false
+var singleBatchExecution = true
 
 func main() {
 	metaDB, err := sql.Open("duckdb", analisisResidencialesDuckDbFilePath)
@@ -88,6 +88,7 @@ func main() {
 
 	//Cleanup("C:\\Users\\andres\\Documents\\ute\\cleanup\\res1", "C:\\Users\\andres\\Documents\\ute\\cleanup\\res")
 	//FilterIdsCleanup(metaDB, residencialesParquetFilePath, cleanupResidencialesPath)
+	FixOutliers(analisisResidencialesDuckDbFilePath, residencialesParquetFilePath)
 
 	//Arregla los agujeros
 	// mainProcess(
@@ -152,19 +153,19 @@ func main() {
 	// )
 
 	//Calcula mean absolute deviation
-	mainProcess[IdValueResult, IdValueResult](
-		metaDB,
-		nil,
-		getIdsToProcessMadHourly,
-		updateDataMadHourly,
-		nil,
-		nil,
-		0,
-		0,
-		0,
-		nil,
-		nil,
-	)
+	// mainProcess[IdValueResult, IdValueResult](
+	// 	metaDB,
+	// 	nil,
+	// 	getIdsToProcessMadHourly,
+	// 	updateDataMadHourly,
+	// 	nil,
+	// 	nil,
+	// 	0,
+	// 	0,
+	// 	0,
+	// 	nil,
+	// 	nil,
+	// )
 
 	//testAverage(db)
 }
@@ -219,14 +220,12 @@ func mainProcess[TRead any, TRes any](
 		}
 	}
 	close(resultsCh)
-
+	wg.Wait()
 	if afterFunc != nil {
 		if err := afterFunc(metaDB, dataDB); err != nil {
 			log.Fatalf("afterFunc failed: %v", err)
 		}
 	}
-
-	wg.Wait()
 }
 
 func insertData(metaDB *sql.DB, dataDB *sql.DB, data []CustomerIdResult) error {
