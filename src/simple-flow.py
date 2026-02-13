@@ -78,7 +78,9 @@ def main(
         pred_len=pred_len,
         c_out=1,
         enc_in=1,
-        dec_in=1
+        dec_in=1,
+        e_layers=4,
+        d_layers=3
     )
     trainer = Trainer(
         model=model,
@@ -95,9 +97,9 @@ def main(
     )
 
     checkpoint_path = Path("checkpoints")
-    patience = 5
+    patience = 15
     lr = 0.0001
-    train_epochs = 20
+    train_epochs = 30
     setting = 'patience_{}_lr_{}_epochs_{}'.format(
         patience,
         lr,
@@ -125,4 +127,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False)
+    main(train=True)

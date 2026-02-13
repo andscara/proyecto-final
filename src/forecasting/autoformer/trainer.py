@@ -51,9 +51,9 @@ class Trainer:
         # decoder input
         # Zero out only the target variable (first column) for future predictions
         # Keep exogenous features (remaining columns) from batch_y
-        dec_inp_future = batch_y[:, -self.pred_len:, :].clone().float()
+        dec_inp_future = batch_y[:, -self.pred_len:, :].clone()
         dec_inp_future[:, :, 0] = 0  # Zero only the target variable (first column)
-        dec_inp = torch.cat([batch_y[:, :self.label_len, :], dec_inp_future], dim=1).float().to(self.device)
+        dec_inp = torch.cat([batch_y[:, :self.label_len, :], dec_inp_future], dim=1).to(self.device)
         # encoder - decoder
 
         def _run_model():
@@ -85,20 +85,20 @@ class Trainer:
         self.model.eval()
         with torch.no_grad():
             for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):
-                batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float()
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.to(self.device)
 
-                batch_x_mark = batch_x_mark.float().to(self.device)
-                batch_y_mark = batch_y_mark.float().to(self.device)
+                batch_x_mark = batch_x_mark.to(self.device)
+                batch_y_mark = batch_y_mark.to(self.device)
 
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
-                pred = outputs.detach().cpu()
-                true = batch_y.detach().cpu()
+                pred = outputs
+                true = batch_y
 
                 loss = criterion(pred, true)
 
-                total_loss.append(loss)
+                total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
@@ -118,7 +118,7 @@ class Trainer:
 
         model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         
-        criterion = nn.MSELoss()
+        criterion = nn.MSELoss().to(self.device)
 
         # if self.args.use_amp:
         #     scaler = torch.cuda.amp.GradScaler()
@@ -133,10 +133,10 @@ class Trainer:
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.train_loader):
                 iter_count += 1
                 model_optim.zero_grad()
-                batch_x = batch_x.float().to(self.device) # [Batch_Size, Window, 1]
-                batch_y = batch_y.float().to(self.device) # [Batch_Size, Horizon, 1]
-                batch_x_mark = batch_x_mark.float().to(self.device) # [Batch_Size, Window, num_time_features]
-                batch_y_mark = batch_y_mark.float().to(self.device) # [Batch_Size, Horizon, num_time_features]
+                batch_x = batch_x.to(self.device) # [Batch_Size, Window, 1]
+                batch_y = batch_y.to(self.device) # [Batch_Size, Horizon, 1]
+                batch_x_mark = batch_x_mark.to(self.device) # [Batch_Size, Window, num_time_features]
+                batch_y_mark = batch_y_mark.to(self.device) # [Batch_Size, Horizon, num_time_features]
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
                 loss = criterion(outputs, batch_y)
@@ -204,13 +204,12 @@ class Trainer:
 
         self.model.eval()
         with torch.no_grad():
-            criterion = nn.MSELoss()
             for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
                 real_y = batch_y[:, -self.pred_len:, :]
-                batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float().to(self.device)
-                batch_x_mark = batch_x_mark.float().to(self.device)
-                batch_y_mark = batch_y_mark.float().to(self.device)
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.to(self.device)
+                batch_x_mark = batch_x_mark.to(self.device)
+                batch_y_mark = batch_y_mark.to(self.device)
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
                 mse_per_item = F.mse_loss(
@@ -271,10 +270,10 @@ class Trainer:
                 batch_x_mark = batch_x_mark.unsqueeze(0)
                 batch_y_mark = torch.tensor(batch_y_mark)
                 batch_y_mark = batch_y_mark.unsqueeze(0)
-                batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float().to(self.device)
-                batch_x_mark = batch_x_mark.float().to(self.device)
-                batch_y_mark = batch_y_mark.float().to(self.device)
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.to(self.device)
+                batch_x_mark = batch_x_mark.to(self.device)
+                batch_y_mark = batch_y_mark.to(self.device)
                 outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
                 #Remove batch dimension because we are predicting one by one
