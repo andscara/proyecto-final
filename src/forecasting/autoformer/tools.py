@@ -11,7 +11,7 @@ plt.switch_backend('agg')
 def adjust_learning_rate(
         optimizer: torch.optim.Optimizer, 
         epoch: int, 
-        lradj: str = 'type2',
+        lradj: str = 'fixed',
         learning_rate: float = 0.0001
     ):
     """
@@ -23,6 +23,8 @@ def adjust_learning_rate(
 
     # lr = args.learning_rate * (0.2 ** (epoch // 2))
     lr_adjust = {}
+    if lradj == 'fixed':
+        return
     if lradj == 'type1':
         lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
     elif lradj == 'type2':

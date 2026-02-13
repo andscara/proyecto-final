@@ -79,8 +79,8 @@ def main(
         c_out=1,
         enc_in=1,
         dec_in=1,
-        e_layers=4,
-        d_layers=3
+        e_layers=3,
+        d_layers=2
     )
     trainer = Trainer(
         model=model,
