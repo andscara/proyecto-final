@@ -63,34 +63,33 @@ def create_windows(
     # Scale the dataset if needed
     data: NDArray[Any]
 
-    # Determine which columns to include
-    if exog_cols is None:
-        data_cols = [target_col_name]
-    else:
-        data_cols = [target_col_name] + exog_cols
-
-    only_data_df = df[data_cols]
+    # Only the target column goes into the data stream
+    only_data_df = df[[target_col_name]]
     if scale:
+        target_data = only_data_df.values
         if scaler is None:
             scaler = StandardScaler()
-            scaler.fit(only_data_df.values)
-        data = scaler.transform(only_data_df.values)
+            scaler.fit(target_data)
+        data = scaler.transform(target_data)
     else:
         data = only_data_df.values
-    
+
     data = data.astype(np.float32)
     # Add the time features
-    # df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1) -> already exists in the dataframe
     df.loc[:, "timestamp"] = pd.to_datetime(df["dia"]) + pd.to_timedelta(df["hora"] - 1, unit="h")
     df_stamp = df[['timestamp']].copy()
     df_stamp['month'] = df_stamp.timestamp.apply(lambda row: row.month).astype('float32')
     df_stamp['day'] = df_stamp.timestamp.apply(lambda row: row.day).astype('float32')
     df_stamp['weekday'] = df_stamp.timestamp.apply(lambda row: row.weekday()).astype('float32')
     df_stamp['hour'] = df_stamp.timestamp.apply(lambda row: row.hour).astype('float32')
-    # df_stamp['minute'] = df_stamp.timestamp.apply(lambda row: row.minute, 1)
-    # df_stamp['minute'] = df_stamp.minute.map(lambda x: x // 15)
     data_stamp = df_stamp.drop(columns=['timestamp'], axis=1).values
-    # Calculate all  windows based on window_size, horizon and stride
+
+    # Append exogenous columns as additional time features
+    if exog_cols is not None:
+        exog_data = df[exog_cols].values.astype(np.float32)
+        data_stamp = np.concatenate([data_stamp, exog_data], axis=1)
+
+    # Calculate all windows based on window_size, horizon and stride
     data_windows: list[NDArray[Any]] = []
     time_features_windows: list[NDArray[Any]] = []
     for start in range(0, len(df) - windows_size - horizon + 1, stride):
@@ -103,6 +102,7 @@ def data_splitter(
     df: pd.DataFrame,
     windows_size: int,
     horizon: int,
+    label_len: int,
     stride: int,
     target_col_name: str,
     scale: bool = True,
@@ -111,7 +111,6 @@ def data_splitter(
 ) -> tuple[WindowsDataset, WindowsDataset, WindowsDataset, WindowsDataset]:
     
     seq_len = windows_size
-    label_len = windows_size // 2
     pred_len = horizon
 
     # Divide the dataframe [start_train, end_train], [end_df_minus_1_year, end_df]
@@ -146,6 +145,7 @@ def data_splitter(
         stride=stride,
         target_col_name=target_col_name,
         scale=scale,
+        exog_cols=exog_cols,
         scaler=train_scaler,
     )
 

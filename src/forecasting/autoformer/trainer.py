@@ -46,13 +46,16 @@ class Trainer:
         batch_x: torch.Tensor,
         batch_y: torch.Tensor,
         batch_x_mark: torch.Tensor,
-        batch_y_mark: torch.Tensor
+        batch_y_mark: torch.Tensor,
+        rolling: bool = False,
+        rolling_step: int = 0,
     ):
+        if rolling and rolling_step > 0:
+            return self._predict_rolling(batch_x, batch_y, batch_x_mark, batch_y_mark, rolling_step)
+
         # decoder input
-        # Zero out only the target variable (first column) for future predictions
-        # Keep exogenous features (remaining columns) from batch_y
-        dec_inp_future = batch_y[:, -self.pred_len:, :].clone()
-        dec_inp_future[:, :, 0] = 0  # Zero only the target variable (first column)
+        # Zero out future predictions (data stream only contains the target variable)
+        dec_inp_future = torch.zeros_like(batch_y[:, -self.pred_len:, :])
         dec_inp = torch.cat([batch_y[:, :self.label_len, :], dec_inp_future], dim=1).to(self.device)
         # encoder - decoder
 
@@ -62,24 +65,88 @@ class Trainer:
                 outputs = outputs[0]
             return outputs
 
-        # if self.args.use_amp:
-        #     with torch.cuda.amp.autocast():
-        #         outputs = _run_model()
-        # else:
         outputs = _run_model()
 
-        # Extract only the target variable (first column) for comparison
-        # Model outputs only c_out=1 (target), so outputs shape is (B, pred_len, 1)
-        # batch_y may have multiple features, so extract only the first one (target)
-        outputs = outputs[:, -self.pred_len:, :]  # Model already outputs only target
-        batch_y = batch_y[:, -self.pred_len:, 0:1].to(self.device)  # Extract only target from batch_y
+        outputs = outputs[:, -self.pred_len:, :]
+        batch_y = batch_y[:, -self.pred_len:, :].to(self.device)
+
+        return outputs, batch_y
+
+    def _predict_rolling(
+        self,
+        batch_x: torch.Tensor,
+        batch_y: torch.Tensor,
+        batch_x_mark: torch.Tensor,
+        batch_y_mark: torch.Tensor,
+        rolling_step: int,
+    ):
+        """
+        Rolling multi-step prediction. Generates `rolling_step` time steps per roll,
+        then shifts the encoder window forward by `rolling_step` and repeats until
+        the full `pred_len` is covered.
+
+        The model always runs with its original pred_len — we just keep only the
+        first `rolling_step` values from each prediction and discard the rest.
+        """
+        total_pred_len = self.pred_len
+        all_outputs = []
+        steps_generated = 0
+
+        # Current encoder input (will shift forward at each roll)
+        cur_x = batch_x  # (B, seq_len, 1)
+        cur_x_mark = batch_x_mark  # (B, seq_len, d_mark)
+
+        while steps_generated < total_pred_len:
+            this_step = min(rolling_step, total_pred_len - steps_generated)
+
+            # Build decoder input: last label_len from cur_x + zeros for full pred_len
+            dec_label = cur_x[:, -self.label_len:, :]  # (B, label_len, 1)
+            dec_future = torch.zeros(cur_x.shape[0], self.pred_len, cur_x.shape[2], device=self.device)
+            dec_inp = torch.cat([dec_label, dec_future], dim=1).to(self.device)  # (B, label_len + pred_len, 1)
+
+            # Build decoder time marks: last label_len + full pred_len of marks
+            dec_mark_label = cur_x_mark[:, -self.label_len:, :]
+            # Take pred_len future marks starting from the current offset
+            mark_start = self.label_len + steps_generated
+            mark_end = mark_start + self.pred_len
+            # Clamp to available marks, pad with last mark if needed
+            available_end = min(mark_end, batch_y_mark.shape[1])
+            dec_mark_future = batch_y_mark[:, mark_start:available_end, :]
+            if dec_mark_future.shape[1] < self.pred_len:
+                pad_len = self.pred_len - dec_mark_future.shape[1]
+                pad = dec_mark_future[:, -1:, :].repeat(1, pad_len, 1)
+                dec_mark_future = torch.cat([dec_mark_future, pad], dim=1)
+            dec_y_mark = torch.cat([dec_mark_label, dec_mark_future], dim=1).to(self.device)
+
+            # Run model with its original pred_len
+            outputs = self.model(cur_x, cur_x_mark, dec_inp, dec_y_mark)
+            if self.output_attention:
+                outputs = outputs[0]
+
+            # Keep only the first `this_step` values, discard the rest
+            step_pred = outputs[:, :this_step, :]  # (B, this_step, 1)
+            all_outputs.append(step_pred)
+            steps_generated += this_step
+
+            if steps_generated < total_pred_len:
+                # Shift encoder window: drop first `this_step` timesteps, append predictions
+                cur_x = torch.cat([cur_x[:, this_step:, :], step_pred], dim=1)
+                cur_x_mark = torch.cat([
+                    cur_x_mark[:, this_step:, :],
+                    batch_y_mark[:, self.label_len + steps_generated - this_step:self.label_len + steps_generated, :]
+                ], dim=1)
+
+        outputs = torch.cat(all_outputs, dim=1)  # (B, pred_len, 1)
+        batch_y = batch_y[:, -self.pred_len:, :].to(self.device)
 
         return outputs, batch_y
     
     def vali(
-        self, 
+        self,
         data_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor]],
-        criterion: nn.Module
+        criterion: nn.Module,
+        rolling: bool = False,
+        rolling_step: int = 0,
     ):
         total_loss = []
         self.model.eval()
@@ -91,13 +158,12 @@ class Trainer:
                 batch_x_mark = batch_x_mark.to(self.device)
                 batch_y_mark = batch_y_mark.to(self.device)
 
-                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+                outputs, batch_y = self._predict(
+                    batch_x, batch_y, batch_x_mark, batch_y_mark,
+                    rolling=rolling, rolling_step=rolling_step
+                )
 
-                pred = outputs
-                true = batch_y
-
-                loss = criterion(pred, true)
-
+                loss = criterion(outputs, batch_y)
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
@@ -110,6 +176,7 @@ class Trainer:
         verbose: bool = True,
         learning_rate: float = 0.001,
         train_epochs: int = 10,
+        rolling_step: int = 0,
     ):
         time_now = time.time()
 
@@ -117,12 +184,10 @@ class Trainer:
         early_stopping = EarlyStopping(patience=patience, verbose=verbose)
 
         model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        
+
         criterion = nn.MSELoss().to(self.device)
 
-        # if self.args.use_amp:
-        #     scaler = torch.cuda.amp.GradScaler()
-
+        use_rolling = rolling_step > 0
 
         for epoch in range(train_epochs):
             iter_count = 0
@@ -150,11 +215,6 @@ class Trainer:
                     iter_count = 0
                     time_now = time.time()
 
-                # if self.args.use_amp:
-                #     scaler.scale(loss).backward()
-                #     scaler.step(model_optim)
-                #     scaler.update()
-                # else:
                 loss.backward()
                 model_optim.step()
 
@@ -162,8 +222,21 @@ class Trainer:
             train_loss = np.average(train_loss)
             vali_loss = self.vali(self.val_loader, criterion)
 
-            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss))
+            if use_rolling:
+                vali_loss_rolling = self.vali(
+                    self.val_loader, criterion,
+                    rolling=True, rolling_step=rolling_step
+                )
+                print(
+                    "Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} "
+                    "Vali Loss (single-shot): {3:.7f} Vali Loss (rolling-{4}): {5:.7f}".format(
+                        epoch + 1, train_steps, train_loss, vali_loss, rolling_step, vali_loss_rolling
+                    )
+                )
+            else:
+                print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
+                    epoch + 1, train_steps, train_loss, vali_loss))
+
             early_stopping(vali_loss, self.model, checkpoint_path)
             if early_stopping.early_stop:
                 print("Early stopping")
@@ -205,7 +278,7 @@ class Trainer:
         self.model.eval()
         with torch.no_grad():
             for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
-                real_y = batch_y[:, -self.pred_len:, :]
+                real_y = batch_y[:, -self.pred_len:, 0:1]
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
                 batch_x_mark = batch_x_mark.to(self.device)
@@ -221,7 +294,7 @@ class Trainer:
                 for error in mse_per_item:
                     global_errors.append(error.item())
 
-                x_hist = batch_x.detach().cpu().numpy()     # (B, seq_len, 1)
+                x_hist = batch_x[:,:,0:1].detach().cpu().numpy()     # (B, seq_len, 1)
                 x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
                 y_pred = outputs.detach().cpu().numpy()     # (B, pred_len, 1)
                 y_pred = self._inverse_scale(y_pred, self.test_loader.dataset.scaler)
@@ -259,8 +332,8 @@ class Trainer:
             y_reals = []
 
             for start_index in range(0, len(self.all_dataset), 1):
-                batch_x, batch_y, batch_x_mark, batch_y_mark = self.all_dataset.__getitem__(start_index)
-                real_y = batch_y[-self.pred_len:, :]
+                batch_x, batch_y, batch_x_mark, batch_y_mark = self.all_dataset[start_index]
+                real_y = batch_y[-self.pred_len:, 0:1]
                 #Add batch dimension
                 batch_x = torch.tensor(batch_x)
                 batch_x = batch_x.unsqueeze(0)
@@ -324,4 +397,182 @@ class Trainer:
 
         mean_global_error = np.mean(global_errors)
         print(f"Global Error (MSE): {mean_global_error}")
+
+    def predict_series(
+        self,
+        pdf: PdfPages,
+        checkpoint_path: Path,
+        rolling_step: int = 0,
+        load: bool = True,
+    ):
+        """
+        Predict over the whole series using all_dataset windows.
+        Each window uses real (ground truth) values for the encoder input.
+
+        - rolling_step=0: single-shot, takes all pred_len steps from each prediction,
+          advances by pred_len (stride = pred_len // 24 windows).
+        - rolling_step>0: takes only the first rolling_step hours from each prediction,
+          advances by rolling_step (stride = rolling_step // 24 windows).
+          Uses single-shot prediction (not _predict_rolling), since the encoder
+          always has real data.
+        """
+        if load:
+            best_model_path = checkpoint_path / 'checkpoint.pth'
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        take_steps = self.pred_len if rolling_step == 0 else rolling_step
+        # Window stride in the dataset is 24h (1 day), so to advance by take_steps hours
+        # we skip take_steps // 24 windows
+        window_advance = max(1, take_steps // 24)
+
+        y_preds = []
+        y_reals = []
+
+        self.model.eval()
+        with torch.no_grad():
+            for idx in range(0, len(self.all_dataset), window_advance):
+                batch_x, batch_y, batch_x_mark, batch_y_mark = self.all_dataset[idx]
+                real_y = batch_y[-self.pred_len:, 0:1]  # (pred_len, 1)
+
+                # Add batch dimension
+                batch_x = torch.tensor(batch_x).unsqueeze(0).to(self.device)
+                batch_y = torch.tensor(batch_y).unsqueeze(0).to(self.device)
+                batch_x_mark = torch.tensor(batch_x_mark).unsqueeze(0).to(self.device)
+                batch_y_mark = torch.tensor(batch_y_mark).unsqueeze(0).to(self.device)
+
+                # Always single-shot: encoder has real data, no need for rolling
+                outputs, _ = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
+                y_pred = outputs.detach().cpu().numpy()  # (1, pred_len, 1)
+                y_pred = self._inverse_scale(y_pred, self.all_dataset.scaler)
+                y_preds.append(y_pred[0, :take_steps])  # (take_steps, 1)
+
+                real_y = self._inverse_scale(real_y[np.newaxis, :, :], self.all_dataset.scaler)
+                y_reals.append(real_y[0, :take_steps])  # (take_steps, 1)
+
+        y_preds_flat = np.array(y_preds).flatten()
+        y_reals_flat = np.array(y_reals).flatten()
+
+        mse = np.mean((y_preds_flat - y_reals_flat) ** 2)
+        mae = np.mean(np.abs(y_preds_flat - y_reals_flat))
+        # MAPE: avoid division by zero by masking near-zero real values
+        nonzero_mask = np.abs(y_reals_flat) > 1e-8
+        mape = np.mean(np.abs((y_reals_flat[nonzero_mask] - y_preds_flat[nonzero_mask]) / y_reals_flat[nonzero_mask])) * 100
+
+        mode_label = f"rolling-{rolling_step}" if rolling_step > 0 else "single-shot"
+        print(f"predict_series ({mode_label}): MSE={mse:.4f}, MAE={mae:.4f}, MAPE={mape:.2f}%")
+
+        plt.figure(figsize=(20, 6))
+        plt.plot(y_reals_flat, label="Real", color="blue")
+        plt.plot(y_preds_flat, label=f"Predicción ({mode_label})", color="green", linestyle='dashed', alpha=0.7)
+        plt.legend()
+        plt.title(f"Series prediction ({mode_label}) — MSE: {mse:.4f}, MAE: {mae:.4f}, MAPE: {mape:.2f}%")
+        pdf.savefig()
+        plt.close()
+
+        return y_preds_flat, y_reals_flat
+
+    def predict_windows(
+        self,
+        pdf: PdfPages,
+        checkpoint_path: Path,
+        rolling_step: int = 0,
+        load: bool = True,
+    ):
+        """
+        Predict each test window individually and plot history + prediction + real.
+        Same parameters as predict_series.
+
+        - rolling_step=0: single-shot, predicts the full pred_len in one pass.
+        - rolling_step>0: multi-step rolling prediction, predicts rolling_step
+          at a time and feeds predictions back into the encoder to cover
+          the full pred_len.
+        """
+        if load:
+            best_model_path = checkpoint_path / 'checkpoint.pth'
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        use_rolling = rolling_step > 0
+        mode_label = f"rolling-{rolling_step}" if use_rolling else "single-shot"
+
+        global_errors = []
+        global_mapes = []
+
+        self.model.eval()
+        with torch.no_grad():
+            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.to(self.device)
+                batch_x_mark = batch_x_mark.to(self.device)
+                batch_y_mark = batch_y_mark.to(self.device)
+
+                real_y = batch_y[:, -self.pred_len:, 0:1]
+                outputs, _ = self._predict(
+                    batch_x, batch_y, batch_x_mark, batch_y_mark,
+                    rolling=use_rolling, rolling_step=rolling_step
+                )
+
+                # Compute per-item MSE over the full pred_len
+                mse_per_item = F.mse_loss(
+                    outputs,
+                    real_y,
+                    reduction='none'
+                ).mean(dim=(1, 2))
+
+                # Inverse scale for plotting
+                x_hist = batch_x[:, :, 0:1].detach().cpu().numpy()
+                x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
+
+                y_pred = outputs.detach().cpu().numpy()
+                y_pred = self._inverse_scale(y_pred, self.test_loader.dataset.scaler)
+
+                real_y_np = real_y.detach().cpu().numpy()
+                real_y_np = self._inverse_scale(real_y_np, self.test_loader.dataset.scaler)
+
+                timestamps = batch_x_mark.detach().cpu().numpy()
+
+                # Plot each item in the batch
+                for b in range(batch_x.shape[0]):
+                    error = mse_per_item[b].item()
+                    global_errors.append(error)
+
+                    hist = x_hist[b, :, 0]  # (seq_len,)
+                    pred = y_pred[b, :, 0]  # (pred_len,)
+                    real = real_y_np[b, :, 0]  # (pred_len,)
+
+                    # Per-window MAPE
+                    nonzero = np.abs(real) > 1e-8
+                    window_mape = np.mean(np.abs((real[nonzero] - pred[nonzero]) / real[nonzero])) * 100
+
+                    # Build datetime axis
+                    ts = timestamps[b]  # (seq_len, d_mark)
+                    start_datetime = datetime(
+                        2000, int(ts[0][0]), int(ts[0][1]), int(ts[0][3])
+                    )
+                    total_len = len(hist) + self.pred_len
+                    dates = [start_datetime + timedelta(hours=j) for j in range(total_len)]
+
+                    plt.figure(figsize=(16, 5))
+                    plt.plot(dates[:self.seq_len], hist, label="Historia", color="blue")
+                    plt.plot(dates[self.seq_len:], pred, label=f"Predicción ({mode_label})", color="orange")
+                    plt.plot(dates[self.seq_len:], real, label="Real", color="green", linestyle='dashed')
+                    plt.xticks(dates[::max(1, total_len // 6)], rotation=30)
+                    plt.legend()
+                    plt.text(
+                        0.99, 0.01,
+                        f'MSE: {error:.4f} | MAPE: {window_mape:.2f}%',
+                        transform=plt.gca().transAxes,
+                        fontsize=10,
+                        ha='right',
+                        va='bottom'
+                    )
+                    plt.tight_layout()
+                    pdf.savefig()
+                    plt.close()
+
+                    global_mapes.append(window_mape)
+
+        mean_error = np.mean(global_errors)
+        mean_mape = np.mean(global_mapes)
+        print(f"predict_windows ({mode_label}): Mean MSE={mean_error:.4f}, Mean MAPE={mean_mape:.2f}% over {len(global_errors)} windows")
 

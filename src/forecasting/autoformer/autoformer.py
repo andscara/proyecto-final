@@ -31,6 +31,7 @@ class Autoformer(nn.Module):
             e_layers: int = 2,
             d_layers: int = 1,
             c_out: int = 7,
+            d_mark: int | None = None,
     ):
         """
         Autoformer constructor
@@ -67,9 +68,9 @@ class Autoformer(nn.Module):
         # The series-wise connection inherently contains the sequential information.
         # Thus, we can discard the position embedding of transformers.
         self.enc_embedding = DataEmbedding_wo_pos(enc_in, d_model, embed, freq,
-                                                  dropout)
+                                                  dropout, d_mark=d_mark)
         self.dec_embedding = DataEmbedding_wo_pos(dec_in, d_model, embed, freq,
-                                                  dropout)
+                                                  dropout, d_mark=d_mark)
 
         # Encoder
         self.encoder = Encoder(

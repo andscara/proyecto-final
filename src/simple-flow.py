@@ -6,6 +6,7 @@ import duckdb as ddb
 from numpy import c_
 import pandas as pd
 import os
+from matplotlib.backends.backend_pdf import PdfPages
 
 from forecasting.autoformer.autoformer import Autoformer
 from forecasting.autoformer.trainer import Trainer
@@ -17,19 +18,31 @@ from pathlib import Path
 PATH = r"C:\Users\andres\Documents\ute\cleanup\res-outliers"
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
-BATCH_SIZE = 64
+BATCH_SIZE = 32
+LABEL_LEN = WINDOW_SIZE * 4 // 4
+
+EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 
 
 def main(
     train: bool = True
 ):
+    # query = f"""
+    # select departamento, dia, hora, SUM(valor) as agg_valor
+    # from read_parquet('{PATH}')
+    # group by departamento, dia, hora
+    # order by departamento, dia, hora;
+    # """
     query = f"""
-    select departamento, dia, hora, SUM(valor) as agg_valor
-    from read_parquet('{PATH}')
-    group by departamento, dia, hora
-    order by departamento, dia, hora;
+    select e.departamento, e.dia, e.hora, agg_valor, (temp_max + 15) / 65 as temp_max, (temp_min + 15) / 65 as temp_min, (temp_media + 15) / 65 as temp_media
+    from (
+        select departamento, dia, hora, SUM(valor) as agg_valor
+        from read_parquet('{PATH}')
+        group by departamento, dia, hora
+    ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
+    order by e.departamento, e.dia, e.hora
     """   
-    con = ddb.connect()
+    con = ddb.connect(database=r"C:\Users\andres\Documents\features")
     ts_agg_departamento = con.execute(query).fetchdf()
     print(f"Cantidad de registros totales en todos los departamentos agregados: {len(ts_agg_departamento)}")
     con.close()
@@ -41,9 +54,11 @@ def main(
         df=montevideo_data,
         windows_size=WINDOW_SIZE,
         horizon=HORIZON,
+        label_len=LABEL_LEN,
         stride=24, # every day
         target_col_name="agg_valor",
-        scale=True
+        scale=True,
+        exog_cols=EXOG_COLS
     )
 
     train_dataloader = data.DataLoader(
@@ -70,17 +85,17 @@ def main(
     
     print("Creating model and trainer...")
     seq_len = WINDOW_SIZE
-    label_len = WINDOW_SIZE // 2
     pred_len = HORIZON
     model = Autoformer(
         seq_len=seq_len,
-        label_len=label_len,
+        label_len=LABEL_LEN,
         pred_len=pred_len,
         c_out=1,
         enc_in=1,
         dec_in=1,
         e_layers=3,
-        d_layers=2
+        d_layers=2,
+        d_mark=7  # 4 time features (month, day, weekday, hour) + 3 temperature cols
     )
     trainer = Trainer(
         model=model,
@@ -90,16 +105,16 @@ def main(
         val_loader=val_dataloader,
         test_loader=test_dataloader,
         seq_len=seq_len,
-        label_len=label_len,
+        label_len=LABEL_LEN,
         pred_len=pred_len,
         output_attention=False,
         device_name='cuda' #mps for mac and cuda for gpu
     )
 
     checkpoint_path = Path("checkpoints")
-    patience = 15
-    lr = 0.0001
-    train_epochs = 30
+    patience = 50
+    lr = 0.00003
+    train_epochs = 300
     setting = 'patience_{}_lr_{}_epochs_{}'.format(
         patience,
         lr,
@@ -119,12 +134,34 @@ def main(
         )
         print("Training finished.")
     print("Starting testing...")
-    trainer.predict(
-        checkpoint_path=path,
-        load= not train
-    )
-
+    plots_path = Path('results') / path / f'graficas.pdf'
+    plots_path.parent.mkdir(parents=True, exist_ok=True)
+    with PdfPages(plots_path) as pdf:
+        trainer.predict_series(
+            pdf=pdf,
+            checkpoint_path=path,
+            rolling_step=0,
+            load= not train
+        )
+        trainer.predict_series(
+            pdf=pdf,
+            checkpoint_path=path,
+            rolling_step=24 * 1,
+            load= not train
+        )
+        trainer.predict_windows(
+            pdf=pdf,
+            checkpoint_path=path,
+            rolling_step=0,
+            load= not train
+        )
+        trainer.predict_windows(
+            pdf=pdf,
+            checkpoint_path=path,
+            rolling_step=24 * 1,
+            load= not train
+        )
 
 
 if __name__ == "__main__":
-    main(train=True)
+    main(train=False)

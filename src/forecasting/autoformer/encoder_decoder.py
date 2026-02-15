@@ -152,7 +152,7 @@ class DecoderLayer(nn.Module):
         self.decomp3 = SeriesDecomp(moving_avg)
         self.dropout = nn.Dropout(dropout)
         self.projection = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=3, stride=1, padding=1,
-                                    padding_mode='circular', bias=False)
+                                    padding_mode='replicate', bias=False)
         self.activation = F.relu if activation == "relu" else F.gelu
 
     def forward(self, x: torch.Tensor, cross: torch.Tensor, x_mask: torch.Tensor | None = None, cross_mask: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
