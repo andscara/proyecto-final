@@ -3,6 +3,7 @@ import time
 import torch
 import torch.nn as nn
 from torch.utils import data
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 from forecasting.autoformer.data_loader import WindowsDataset
 from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_learning_rate
@@ -177,6 +178,8 @@ class Trainer:
         learning_rate: float = 0.001,
         train_epochs: int = 10,
         rolling_step: int = 0,
+        reduce_lr_patience: int = 3,
+        reduce_lr_factor: float = 0.7,
     ):
         time_now = time.time()
 
@@ -184,6 +187,8 @@ class Trainer:
         early_stopping = EarlyStopping(patience=patience, verbose=verbose)
 
         model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
+                                       patience=reduce_lr_patience, min_lr=1e-8)
 
         criterion = nn.MSELoss().to(self.device)
 
@@ -238,6 +243,7 @@ class Trainer:
                     epoch + 1, train_steps, train_loss, vali_loss))
 
             early_stopping(vali_loss, self.model, checkpoint_path)
+            scheduler.step(vali_loss)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break

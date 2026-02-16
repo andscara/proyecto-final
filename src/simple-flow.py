@@ -13,9 +13,11 @@ from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
 from forecasting.autoformer.data_loader import data_splitter
 from pathlib import Path
+from dotenv import load_dotenv
+import os
 
-
-PATH = r"C:\Users\andres\Documents\ute\cleanup\res-outliers"
+load_dotenv()
+PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
 BATCH_SIZE = 32
@@ -42,7 +44,7 @@ def main(
     ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
     order by e.departamento, e.dia, e.hora
     """   
-    con = ddb.connect(database=r"C:\Users\andres\Documents\features")
+    con = ddb.connect(database=os.getenv("DB_PATH"))
     ts_agg_departamento = con.execute(query).fetchdf()
     print(f"Cantidad de registros totales en todos los departamentos agregados: {len(ts_agg_departamento)}")
     con.close()
@@ -93,9 +95,9 @@ def main(
         c_out=1,
         enc_in=1,
         dec_in=1,
-        e_layers=3,
-        d_layers=2,
-        d_mark=7  # 4 time features (month, day, weekday, hour) + 3 temperature cols
+        e_layers=2,
+        d_layers=1,
+        d_mark=8  # 4 time features (month, day, weekday, hour) + 3 temperature cols + 1 holiday col
     )
     trainer = Trainer(
         model=model,
@@ -108,13 +110,13 @@ def main(
         label_len=LABEL_LEN,
         pred_len=pred_len,
         output_attention=False,
-        device_name='cuda' #mps for mac and cuda for gpu
+        device_name=os.getenv("DEVICE_NAME") #mps for mac and cuda for gpu
     )
 
     checkpoint_path = Path("checkpoints")
-    patience = 50
-    lr = 0.00003
-    train_epochs = 300
+    patience = 10
+    lr = 0.0003
+    train_epochs = 100
     setting = 'patience_{}_lr_{}_epochs_{}'.format(
         patience,
         lr,
@@ -164,4 +166,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False)
+    main(train=True)

@@ -50,6 +50,17 @@ class WindowsDataset(data.Dataset):
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
+
+def get_holidays() -> list[pd.Timestamp]:
+    holidays: list[pd.Timestamp] = []
+    for year in range(2020, 2025):
+        holidays.append(pd.Timestamp(f"{year}-01-01"))
+        holidays.append(pd.Timestamp(f"{year}-05-01"))
+        holidays.append(pd.Timestamp(f"{year}-07-18"))
+        holidays.append(pd.Timestamp(f"{year}-08-25"))
+        holidays.append(pd.Timestamp(f"{year}-12-25"))
+    return holidays
+
 def create_windows(
     df: pd.DataFrame,
     windows_size: int,
@@ -82,7 +93,11 @@ def create_windows(
     df_stamp['day'] = df_stamp.timestamp.apply(lambda row: row.day).astype('float32')
     df_stamp['weekday'] = df_stamp.timestamp.apply(lambda row: row.weekday()).astype('float32')
     df_stamp['hour'] = df_stamp.timestamp.apply(lambda row: row.hour).astype('float32')
+    # Add holidays as a binary feature
+    holidays = get_holidays()
+    df_stamp['is_holiday'] = df_stamp['timestamp'].isin(holidays).astype(np.float32)
     data_stamp = df_stamp.drop(columns=['timestamp'], axis=1).values
+
 
     # Append exogenous columns as additional time features
     if exog_cols is not None:

@@ -12,3 +12,6 @@ results/
 .vscode/
 
 *graficas.pdf
+
+#.env file with sensitive information
+.env
