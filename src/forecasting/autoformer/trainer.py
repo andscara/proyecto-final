@@ -149,6 +149,7 @@ class Trainer:
         rolling_step: int = 0,
     ):
         total_loss = []
+        total_mape = []
         self.model.eval()
         with torch.no_grad():
             for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):
@@ -165,9 +166,18 @@ class Trainer:
 
                 loss = criterion(outputs, batch_y)
                 total_loss.append(loss.item())
+
+                # MAPE per batch: avoid division by zero
+                abs_y = torch.abs(batch_y)
+                nonzero_mask = abs_y > 1e-8
+                if nonzero_mask.any():
+                    mape = (torch.abs(batch_y[nonzero_mask] - outputs[nonzero_mask]) / abs_y[nonzero_mask]).mean().item() * 100
+                    total_mape.append(mape)
+
         total_loss = np.average(total_loss)
+        total_mape = np.average(total_mape) if total_mape else float('nan')
         self.model.train()
-        return total_loss
+        return total_loss, total_mape
 
     def train(
         self,
@@ -220,22 +230,24 @@ class Trainer:
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
-            vali_loss = self.vali(self.val_loader, criterion)
+            vali_loss, vali_mape = self.vali(self.val_loader, criterion)
 
             if use_rolling:
-                vali_loss_rolling = self.vali(
+                vali_loss_rolling, vali_mape_rolling = self.vali(
                     self.val_loader, criterion,
                     rolling=True, rolling_step=rolling_step
                 )
                 print(
                     "Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} "
-                    "Vali Loss (single-shot): {3:.7f} Vali Loss (rolling-{4}): {5:.7f}".format(
-                        epoch + 1, train_steps, train_loss, vali_loss, rolling_step, vali_loss_rolling
+                    "Vali Loss (single-shot): {3:.7f} Vali MAPE: {4:.2f}% "
+                    "Vali Loss (rolling-{5}): {6:.7f} Vali MAPE (rolling): {7:.2f}%".format(
+                        epoch + 1, train_steps, train_loss, vali_loss, vali_mape,
+                        rolling_step, vali_loss_rolling, vali_mape_rolling
                     )
                 )
             else:
-                print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
-                    epoch + 1, train_steps, train_loss, vali_loss))
+                print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Vali MAPE: {4:.2f}%".format(
+                    epoch + 1, train_steps, train_loss, vali_loss, vali_mape))
 
             early_stopping(vali_loss, self.model, checkpoint_path)
             if early_stopping.early_stop:
