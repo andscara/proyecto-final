@@ -8,3 +8,5 @@ FROM read_csv('localidades_con_estacion_proxima.csv',
         'localidad': 'VARCHAR',
         'estacion': 'VARCHAR'
     });
+
+
