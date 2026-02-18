@@ -12,3 +12,5 @@ results/
 .vscode/
 
 *graficas.pdf
+
+.env
