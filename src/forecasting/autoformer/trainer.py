@@ -152,6 +152,7 @@ class Trainer:
         total_mape = []
         self.model.eval()
         with torch.no_grad():
+            scaler = data_loader.dataset.scaler
             for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
@@ -167,12 +168,20 @@ class Trainer:
                 loss = criterion(outputs, batch_y)
                 total_loss.append(loss.item())
 
+                if scaler is not None:
+                    outputs_orig = outputs * scaler.scale_[0] + scaler.mean_[0]
+                    batch_y_orig = batch_y * scaler.scale_[0] + scaler.mean_[0]
+                else:
+                    outputs_orig = outputs
+                    batch_y_orig = batch_y
+
                 # MAPE per batch: avoid division by zero
-                abs_y = torch.abs(batch_y)
-                nonzero_mask = abs_y > 1e-8
+                abs_y = torch.abs(batch_y_orig)
+                nonzero_mask = abs_y > 1e-10
                 if nonzero_mask.any():
-                    mape = (torch.abs(batch_y[nonzero_mask] - outputs[nonzero_mask]) / abs_y[nonzero_mask]).mean().item() * 100
+                    mape = (torch.abs(batch_y_orig[nonzero_mask] - outputs_orig[nonzero_mask]) / abs_y[nonzero_mask]).mean().item() * 100
                     total_mape.append(mape)
+
 
         total_loss = np.average(total_loss)
         total_mape = np.average(total_mape) if total_mape else float('nan')
