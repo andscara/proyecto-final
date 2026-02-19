@@ -1,6 +1,7 @@
 #type: ignore
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
 def compared_version(ver1, ver2):
@@ -58,6 +59,13 @@ class TokenEmbedding(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='leaky_relu')
 
     def forward(self, x):
+        if x.device.type == 'mps':
+            # padding_mode='circular' can produce wrong gradients on MPS; compute on CPU
+            x_perm = x.permute(0, 2, 1).contiguous().cpu()  # [B, C_in, L]
+            w = self.tokenConv.weight.cpu()
+            # Manual circular padding: pad left with last element, right with first
+            padded = torch.cat([x_perm[:, :, -1:], x_perm, x_perm[:, :, :1]], dim=-1)
+            return F.conv1d(padded, w).transpose(1, 2).to(x.device)
         x = self.tokenConv(x.permute(0, 2, 1)).transpose(1, 2)
         return x
 

@@ -20,8 +20,8 @@ load_dotenv()
 PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
-BATCH_SIZE = 32
-LABEL_LEN = WINDOW_SIZE * 4 // 4
+BATCH_SIZE = 64
+LABEL_LEN = WINDOW_SIZE // 2
 
 EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 
@@ -92,11 +92,14 @@ def main(
         seq_len=seq_len,
         label_len=LABEL_LEN,
         pred_len=pred_len,
+        moving_avg=169,
         c_out=1,
         enc_in=1,
         dec_in=1,
         e_layers=2,
         d_layers=1,
+        dropout=0,
+        factor=2,
         d_mark=8  # 4 time features (month, day, weekday, hour) + 3 temperature cols + 1 holiday col
     )
     trainer = Trainer(
@@ -114,9 +117,9 @@ def main(
     )
 
     checkpoint_path = Path("checkpoints")
-    patience = 10
-    lr = 0.0003
-    train_epochs = 100
+    patience = 25
+    lr = 0.00001
+    train_epochs = 300
     setting = 'patience_{}_lr_{}_epochs_{}'.format(
         patience,
         lr,
