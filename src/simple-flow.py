@@ -21,9 +21,10 @@ PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = 24*7 # 1 week
 BATCH_SIZE = 64
-LABEL_LEN = WINDOW_SIZE // 2
+LABEL_LEN = WINDOW_SIZE
 
-EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+#EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+EXOG_COLS = ['temperature']
 
 
 def main(
@@ -35,13 +36,25 @@ def main(
     # group by departamento, dia, hora
     # order by departamento, dia, hora;
     # """
+
+    # query = f"""
+    # select e.departamento, e.dia, e.hora, agg_valor, (temp_max + 15) / 65 as temp_max, (temp_min + 15) / 65 as temp_min, (temp_media + 15) / 65 as temp_media
+    # from (
+    #     select departamento, dia, hora, SUM(valor) as agg_valor
+    #     from read_parquet('{PATH}')
+    #     group by departamento, dia, hora
+    # ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
+    # order by e.departamento, e.dia, e.hora
+    # """
+
     query = f"""
-    select e.departamento, e.dia, e.hora, agg_valor, (temp_max + 15) / 65 as temp_max, (temp_min + 15) / 65 as temp_min, (temp_media + 15) / 65 as temp_media
+    select e.departamento, e.dia, e.hora, agg_valor, (temperature + 15) / 65 as temperature
     from (
         select departamento, dia, hora, SUM(valor) as agg_valor
         from read_parquet('{PATH}')
+        where departamento='MONTEVIDEO'
         group by departamento, dia, hora
-    ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
+    ) e inner join temperatura_montevideo t on e.dia=t.dia and e.hora=t.hora
     order by e.departamento, e.dia, e.hora
     """   
     con = ddb.connect(database=os.getenv("DB_PATH"))
@@ -102,7 +115,7 @@ def main(
         d_layers=2,
         dropout=0,
         factor=5,
-        d_mark=8  # 4 time features (month, day, weekday, hour) + 3 temperature cols + 1 holiday col
+        d_mark=6  # 4 time features (month, day, weekday, hour) + 1 temperature col + 1 holiday col
     )
     trainer = Trainer(
         model=model,

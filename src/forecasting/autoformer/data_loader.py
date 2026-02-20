@@ -53,12 +53,79 @@ class WindowsDataset(data.Dataset):
 
 def get_holidays() -> list[pd.Timestamp]:
     holidays: list[pd.Timestamp] = []
+    #Fixed holidays
     for year in range(2020, 2025):
         holidays.append(pd.Timestamp(f"{year}-01-01"))
         holidays.append(pd.Timestamp(f"{year}-05-01"))
         holidays.append(pd.Timestamp(f"{year}-07-18"))
         holidays.append(pd.Timestamp(f"{year}-08-25"))
         holidays.append(pd.Timestamp(f"{year}-12-25"))
+    #Special holidays per year
+    """--- 2022 ---
+    2022 2 28 lunes-carnaval   3
+    2022 3 1 martes-carnaval   3
+    2022 4 11 lunes-turismo   3
+    2022 4 12 martes-turismo   3
+    2022 4 13 miercoles-turismo   3
+    2022 4 14 jueves-turismo   3
+    2022 4 15 viernes-turismo   3
+    """
+    holidays.append(pd.Timestamp("2022-02-28"))
+    holidays.append(pd.Timestamp("2022-03-01"))
+    holidays.append(pd.Timestamp("2022-04-11"))
+    holidays.append(pd.Timestamp("2022-04-12"))
+    holidays.append(pd.Timestamp("2022-04-13"))
+    holidays.append(pd.Timestamp("2022-04-14"))
+    holidays.append(pd.Timestamp("2022-04-15"))
+    """--- 2023 ---
+    2023 2 20 lunes-carnaval   3
+    2023 2 21 martes-carnaval   3
+    2023 4 3 lunes-turismo   3
+    2023 4 4 martes-turismo   3
+    2023 4 5 miercoles-turismo   3
+    2023 4 6 jueves-turismo   3
+    2023 4 7 viernes-turismo   3
+    """
+    holidays.append(pd.Timestamp("2023-02-20"))
+    holidays.append(pd.Timestamp("2023-02-21"))
+    holidays.append(pd.Timestamp("2023-04-03"))
+    holidays.append(pd.Timestamp("2023-04-04"))
+    holidays.append(pd.Timestamp("2023-04-05"))
+    holidays.append(pd.Timestamp("2023-04-06"))
+    holidays.append(pd.Timestamp("2023-04-07"))
+    """--- 2024 ---
+    2024 2 12 lunes-carnaval   3
+    2024 2 13 martes-carnaval   3
+    2024 3 25 lunes-turismo   3
+    2024 3 26 martes-turismo   3
+    2024 3 27 miercoles-turismo   3
+    2024 3 28 jueves-turismo   3
+    2024 3 29 viernes-turismo   3
+    """
+    holidays.append(pd.Timestamp("2024-02-12"))
+    holidays.append(pd.Timestamp("2024-02-13"))
+    holidays.append(pd.Timestamp("2024-03-25"))
+    holidays.append(pd.Timestamp("2024-03-26"))
+    holidays.append(pd.Timestamp("2024-03-27"))
+    holidays.append(pd.Timestamp("2024-03-28"))
+    holidays.append(pd.Timestamp("2024-03-29"))
+    """--- 2025 ---
+    2025 3 3 lunes-carnaval   3
+    2025 3 4 martes-carnaval   3
+    2025 4 14 lunes-turismo   3
+    2025 4 15 martes-turismo   3
+    2025 4 16 miercoles-turismo   3
+    2025 4 17 jueves-turismo   3
+    2025 4 18 viernes-turismo   3
+    """
+    holidays.append(pd.Timestamp("2025-03-03"))
+    holidays.append(pd.Timestamp("2025-03-04"))
+    holidays.append(pd.Timestamp("2025-04-14"))
+    holidays.append(pd.Timestamp("2025-04-15"))
+    holidays.append(pd.Timestamp("2025-04-16"))
+    holidays.append(pd.Timestamp("2025-04-17"))
+    holidays.append(pd.Timestamp("2025-04-18"))
+
     return holidays
 
 def create_windows(
