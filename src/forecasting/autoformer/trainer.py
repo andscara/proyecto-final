@@ -187,8 +187,8 @@ class Trainer:
         early_stopping = EarlyStopping(patience=patience, verbose=verbose)
 
         model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
-                                       patience=reduce_lr_patience, min_lr=1e-8)
+        # scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
+        #                                patience=reduce_lr_patience, min_lr=1e-8)
 
         criterion = nn.MSELoss().to(self.device)
 
@@ -247,7 +247,7 @@ class Trainer:
                     epoch + 1, train_steps, train_loss, vali_loss))
 
             early_stopping(vali_loss, self.model, checkpoint_path)
-            scheduler.step(vali_loss)
+            # scheduler.step(vali_loss)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break

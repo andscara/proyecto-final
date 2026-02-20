@@ -92,14 +92,16 @@ def main(
         seq_len=seq_len,
         label_len=LABEL_LEN,
         pred_len=pred_len,
-        moving_avg=169,
         c_out=1,
         enc_in=1,
         dec_in=1,
-        e_layers=2,
-        d_layers=1,
+        d_model=256,
+        n_heads=4,
+        d_ff=1024,
+        e_layers=3,
+        d_layers=2,
         dropout=0,
-        factor=2,
+        factor=5,
         d_mark=8  # 4 time features (month, day, weekday, hour) + 3 temperature cols + 1 holiday col
     )
     trainer = Trainer(
