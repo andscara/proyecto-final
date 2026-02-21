@@ -109,7 +109,7 @@ def main(
         enc_in=1,
         dec_in=1,
         d_model=256,
-        n_heads=4,
+        n_heads=2,
         d_ff=1024,
         e_layers=3,
         d_layers=2,

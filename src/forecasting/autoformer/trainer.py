@@ -6,6 +6,7 @@ from torch.utils import data
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 from forecasting.autoformer.data_loader import WindowsDataset
+from forecasting.autoformer.smape import SMAPE
 from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_learning_rate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -209,7 +210,7 @@ class Trainer:
         # scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
         #                                patience=reduce_lr_patience, min_lr=1e-8)
 
-        criterion = nn.MSELoss().to(self.device)
+        criterion = SMAPE().to(self.device)
 
         use_rolling = rolling_step > 0
 
