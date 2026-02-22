@@ -114,7 +114,7 @@ def main(
         e_layers=3,
         d_layers=2,
         dropout=0,
-        factor=5,
+        factor=2,
         d_mark=6  # 4 time features (month, day, weekday, hour) + 1 temperature col + 1 holiday col
     )
     trainer = Trainer(
@@ -133,8 +133,8 @@ def main(
 
     checkpoint_path = Path("checkpoints")
     patience = 25
-    lr = 0.00001
-    train_epochs = 300
+    lr = 0.00001 
+    train_epochs = 1
     setting = 'patience_{}_lr_{}_epochs_{}'.format(
         patience,
         lr,
@@ -175,12 +175,13 @@ def main(
             rolling_step=0,
             load= not train
         )
-        trainer.predict_windows(
-            pdf=pdf,
-            checkpoint_path=path,
-            rolling_step=24 * 1,
-            load= not train
-        )
+        # trainer.predict_windows(
+        #     pdf=pdf,
+        #     checkpoint_path=path,
+        #     rolling_step=24 * 1,
+        #     load= not train
+        # )
+        
 
 
 if __name__ == "__main__":

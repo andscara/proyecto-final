@@ -188,7 +188,6 @@ def data_splitter(
     stride: int,
     target_col_name: str,
     scale: bool = True,
-    windows_to_test: int = 20,
     exog_cols: list[str] | None = None
 ) -> tuple[WindowsDataset, WindowsDataset, WindowsDataset, WindowsDataset]:
     
@@ -251,23 +250,24 @@ def data_splitter(
     )
     
     # Get the windows only for testing
-    all_val_test_windows_count = len(val_test_data_windows)
-    
-    assert windows_to_test < all_val_test_windows_count, "The number of windows to test must be less than the total number of windows available for validation and testing."
 
-    rng = np.random.default_rng(seed=42)
-    all_indexes = np.arange(all_val_test_windows_count)
-
-    val_indexes = rng.choice(
-        all_indexes,
-        size=int(all_val_test_windows_count - windows_to_test),
-        replace=False
-    )
     val_data_windows = []
     val_data_time_features_windows = []
-    for idx in val_indexes:
-        val_data_windows.append(val_test_data_windows[idx])
-        val_data_time_features_windows.append(val_test_time_features_windows[idx])
+    test_data_windows = []
+    test_time_features_windows = []
+    add_to_val = True
+    switch_counter = 0
+    for idx in range(len(val_test_data_windows)):
+        if switch_counter == 7: # every 7 windows, switch between val and test
+            add_to_val = not add_to_val
+            switch_counter = 0
+        switch_counter += 1
+        if add_to_val:
+            val_data_windows.append(val_test_data_windows[idx])
+            val_data_time_features_windows.append(val_test_time_features_windows[idx])
+        else:
+            test_data_windows.append(val_test_data_windows[idx])
+            test_time_features_windows.append(val_test_time_features_windows[idx])
 
     val_dataset = WindowsDataset(
         data_windows=val_data_windows,
@@ -277,19 +277,6 @@ def data_splitter(
         pred_len=pred_len,
         scaler=val_test_scaler
     )
-
-    test_indexes = np.setdiff1d(
-        all_indexes,
-        val_indexes,
-        assume_unique=True
-    )        
-    test_data_windows = []
-    test_time_features_windows = []
-    for idx in test_indexes:
-        test_data_windows.append(val_test_data_windows[idx])
-        test_time_features_windows.append(val_test_time_features_windows[idx])
-
-
     test_dataset = WindowsDataset(
         data_windows=test_data_windows,
         time_features_windows=test_time_features_windows,

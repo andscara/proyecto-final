@@ -509,6 +509,7 @@ class Trainer:
         checkpoint_path: Path,
         rolling_step: int = 0,
         load: bool = True,
+        windows_to_plot: int = 20
     ):
         """
         Predict each test window individually and plot history + prediction + real.
@@ -530,12 +531,27 @@ class Trainer:
         global_mapes = []
 
         self.model.eval()
+        rng = np.random.default_rng(seed=42)
+
+        window_indexes = rng.choice(
+            len(self.test_loader.dataset),
+            size=windows_to_plot,
+            replace=False
+        )
         with torch.no_grad():
-            for _, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.test_loader):
-                batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
-                batch_x_mark = batch_x_mark.to(self.device)
-                batch_y_mark = batch_y_mark.to(self.device)
+            for window_idx in window_indexes:
+                # Find the batch that contains this window index
+                batch_x, batch_y, batch_x_mark, batch_y_mark = self.test_loader.dataset[window_idx]
+                
+                batch_x = torch.tensor(batch_x, device=self.device)
+                batch_y = torch.tensor(batch_y, device=self.device)
+                batch_x_mark = torch.tensor(batch_x_mark, device=self.device)
+                batch_y_mark = torch.tensor(batch_y_mark, device=self.device)
+
+                batch_x = batch_x.unsqueeze(0)  # (1, seq_len, 1)
+                batch_y = batch_y.unsqueeze(0)  # (1, seq_len + pred_len, 1)
+                batch_x_mark = batch_x_mark.unsqueeze(0)  # (1, seq_len, d_mark)
+                batch_y_mark = batch_y_mark.unsqueeze(0)   # (1, seq_len + pred_len, d_mark)
 
                 real_y = batch_y[:, -self.pred_len:, 0:1]
                 outputs, _ = self._predict(
