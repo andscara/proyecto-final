@@ -198,7 +198,7 @@ class Trainer:
         train_epochs: int = 10,
         rolling_step: int = 0,
         reduce_lr_patience: int = 3,
-        reduce_lr_factor: float = 0.7,
+        reduce_lr_factor: float = 0.9,
     ):
         time_now = time.time()
 
@@ -206,8 +206,8 @@ class Trainer:
         early_stopping = EarlyStopping(patience=patience, verbose=verbose)
 
         model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
-                                       patience=reduce_lr_patience, min_lr=1e-8)
+        # scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
+        #                                patience=reduce_lr_patience, min_lr=1e-8)
 
         criterion = nn.MSELoss().to(self.device)
 
@@ -240,7 +240,11 @@ class Trainer:
                     time_now = time.time()
 
                 loss.backward()
-                model_optim.step()
+                total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                if torch.isfinite(total_norm):
+                    model_optim.step()
+                else:
+                    model_optim.zero_grad()
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
@@ -264,7 +268,7 @@ class Trainer:
                     epoch + 1, train_steps, train_loss, vali_loss, vali_mape))
 
             early_stopping(vali_loss, self.model, checkpoint_path)
-            scheduler.step(vali_loss)
+            # scheduler.step(vali_loss)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break

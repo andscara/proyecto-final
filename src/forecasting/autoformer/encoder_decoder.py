@@ -12,7 +12,16 @@ class MyLayernorm(nn.Module):
         self.layernorm = nn.LayerNorm(channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_hat = self.layernorm(x)
+        if x.device.type == 'mps':
+            # LayerNorm on MPS can produce near-zero gradients for weight/bias,
+            # causing Adam to blow up when a real gradient finally arrives. Run on CPU.
+            x_cpu = x.cpu()
+            w = self.layernorm.weight.cpu()
+            b = self.layernorm.bias.cpu()
+            x_hat = F.layer_norm(x_cpu, self.layernorm.normalized_shape, w, b, self.layernorm.eps)
+            x_hat = x_hat.to(x.device)
+        else:
+            x_hat = self.layernorm(x)
         bias = torch.mean(x_hat, dim=1).unsqueeze(1).repeat(1, x.shape[1], 1)
         return x_hat - bias
 
@@ -172,7 +181,15 @@ class DecoderLayer(nn.Module):
         x, trend3 = self.decomp3(x + y)
 
         residual_trend = trend1 + trend2 + trend3
-        residual_trend = self.projection(residual_trend.permute(0, 2, 1)).transpose(1, 2)
+        if residual_trend.device.type == 'mps':
+            # padding_mode='replicate' can produce wrong gradients on MPS; compute on CPU
+            rt_cpu = residual_trend.permute(0, 2, 1).contiguous().cpu()  # [B, d_model, L]
+            w = self.projection.weight.cpu()
+            # Manual replicate padding: pad left with first element, right with last
+            padded = torch.cat([rt_cpu[:, :, :1], rt_cpu, rt_cpu[:, :, -1:]], dim=-1)
+            residual_trend = F.conv1d(padded, w).transpose(1, 2).to(trend1.device)
+        else:
+            residual_trend = self.projection(residual_trend.permute(0, 2, 1)).transpose(1, 2)
         return x, residual_trend
 
 

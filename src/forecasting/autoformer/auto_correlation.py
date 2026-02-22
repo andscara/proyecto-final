@@ -113,6 +113,14 @@ class AutoCorrelation(nn.Module):
             values = values[:, :L, :, :]
             keys = keys[:, :L, :, :]
 
+        # MPS has numerical precision issues with FFT, complex ops, and torch.roll gradients.
+        # For correctness, run the entire AutoCorrelation computation on CPU when on MPS.
+        original_device = queries.device
+        if original_device.type == 'mps':
+            queries = queries.cpu()
+            keys = keys.cpu()
+            values = values.cpu()
+
         # period-based dependencies
         q_fft = torch.fft.rfft(queries.permute(0, 2, 3, 1).contiguous(), dim=-1)
         k_fft = torch.fft.rfft(keys.permute(0, 2, 3, 1).contiguous(), dim=-1)
@@ -124,6 +132,10 @@ class AutoCorrelation(nn.Module):
             V = self.time_delay_agg_training(values.permute(0, 2, 3, 1).contiguous(), corr).permute(0, 3, 1, 2)
         else:
             V = self.time_delay_agg_inference(values.permute(0, 2, 3, 1).contiguous(), corr).permute(0, 3, 1, 2)
+
+        if original_device.type == 'mps':
+            V = V.to(original_device)
+            corr = corr.to(original_device)
 
         if self.output_attention:
             return (V.contiguous(), corr.permute(0, 3, 1, 2))
