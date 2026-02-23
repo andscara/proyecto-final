@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from numpy.typing import NDArray
 from typing import Any
 import numpy as np
+import horizon as h
 
 from runner import train
 
@@ -131,7 +132,7 @@ def get_holidays() -> list[pd.Timestamp]:
 def create_windows(
     df: pd.DataFrame,
     windows_size: int,
-    horizon: int,
+    horizon: h.Horizon,
     stride: int,
     target_col_name: str,
     scale: bool,
@@ -157,9 +158,15 @@ def create_windows(
     df.loc[:, "timestamp"] = pd.to_datetime(df["dia"]) + pd.to_timedelta(df["hora"] - 1, unit="h")
     df_stamp = df[['timestamp']].copy()
     df_stamp['month'] = df_stamp.timestamp.apply(lambda row: row.month).astype('float32')
-    df_stamp['day'] = df_stamp.timestamp.apply(lambda row: row.day).astype('float32')
+    if horizon.type == h.HorizonType.WEEK:
+        df_stamp['day'] = np.float32(0.0)
+    else:
+        df_stamp['day'] = df_stamp.timestamp.apply(lambda row: row.day).astype('float32')
     df_stamp['weekday'] = df_stamp.timestamp.apply(lambda row: row.weekday()).astype('float32')
-    df_stamp['hour'] = df_stamp.timestamp.apply(lambda row: row.hour).astype('float32')
+    if horizon.type == h.HorizonType.HOUR:
+        df_stamp['hour'] = df_stamp.timestamp.apply(lambda row: row.hour).astype('float32')
+    else:
+        df_stamp['hour'] = np.float32(0.0)
     # Add holidays as a binary feature
     holidays = get_holidays()
     df_stamp['is_holiday'] = df_stamp['timestamp'].isin(holidays).astype(np.float32)
@@ -174,8 +181,8 @@ def create_windows(
     # Calculate all windows based on window_size, horizon and stride
     data_windows: list[NDArray[Any]] = []
     time_features_windows: list[NDArray[Any]] = []
-    for start in range(0, len(df) - windows_size - horizon + 1, stride):
-        end = start + windows_size + horizon
+    for start in range(0, len(df) - windows_size - horizon.length + 1, stride):
+        end = start + windows_size + horizon.length
         data_windows.append(data[start:end])
         time_features_windows.append(data_stamp[start:end])
     return data_windows, time_features_windows, scaler
@@ -183,7 +190,7 @@ def create_windows(
 def data_splitter(
     df: pd.DataFrame,
     windows_size: int,
-    horizon: int,
+    horizon: h.Horizon,
     label_len: int,
     stride: int,
     target_col_name: str,
@@ -192,7 +199,7 @@ def data_splitter(
 ) -> tuple[WindowsDataset, WindowsDataset, WindowsDataset, WindowsDataset]:
     
     seq_len = windows_size
-    pred_len = horizon
+    pred_len = horizon.length
 
     # Divide the dataframe [start_train, end_train], [end_df_minus_1_year, end_df]
     train_df = df[df['dia'] <  pd.Timestamp('2024-09-01')]

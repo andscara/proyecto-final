@@ -15,20 +15,36 @@ from forecasting.autoformer.data_loader import data_splitter
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import horizon as h
+from enum import Enum
+import numpy as np
+
 
 load_dotenv()
 PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7*2 # 2 weeks
-HORIZON = 24*7 # 1 week
+HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 1 week
 BATCH_SIZE = 64
 LABEL_LEN = WINDOW_SIZE
 
-#EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
-EXOG_COLS = ['temperature']
+EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+# EXOG_COLS = ['temperature']
+
+class Region(Enum):
+    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
+
+    def __init__(self, code: str, departamentos: list[str]):
+        self.code = code
+        self.departamentos = departamentos
 
 
 def main(
-    train: bool = True
+    train: bool = True,
+    clustering_type: str = "regional"
 ):
     # query = f"""
     # select departamento, dia, hora, SUM(valor) as agg_valor
@@ -46,141 +62,159 @@ def main(
     # ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
     # order by e.departamento, e.dia, e.hora
     # """
+    y_preds_flat_results = []
+    y_reals_flat_results = []
+    for region in Region:
+        query = f"""
+        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_max + 15) / 65) as temp_max, AVG((temp_min + 15) / 65) as temp_min, AVG((temp_media + 15) / 65) as temp_media
+        from (
+            select departamento, dia, hora, SUM(valor) as agg_valor
+            from read_parquet('{PATH}')
+            where departamento in {tuple(region.departamentos)}
+            group by departamento, dia, hora
+        ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
+        group by e.dia, e.hora
+        order by e.dia, e.hora
+        """
 
-    query = f"""
-    select e.departamento, e.dia, e.hora, agg_valor, (temperature + 15) / 65 as temperature
-    from (
-        select departamento, dia, hora, SUM(valor) as agg_valor
-        from read_parquet('{PATH}')
-        where departamento='MONTEVIDEO'
-        group by departamento, dia, hora
-    ) e inner join temperatura_montevideo t on e.dia=t.dia and e.hora=t.hora
-    order by e.departamento, e.dia, e.hora
-    """   
-    con = ddb.connect(database=os.getenv("DB_PATH"))
-    ts_agg_departamento = con.execute(query).fetchdf()
-    print(f"Cantidad de registros totales en todos los departamentos agregados: {len(ts_agg_departamento)}")
-    con.close()
-    print ("Creating datasets...")
-    montevideo_data = ts_agg_departamento[ts_agg_departamento["departamento"] == "MONTEVIDEO"]
-    # Train & Test DataLoader
-    
-    all_dataset, train_dataset, val_dataset, test_dataset = data_splitter(
-        df=montevideo_data,
-        windows_size=WINDOW_SIZE,
-        horizon=HORIZON,
-        label_len=LABEL_LEN,
-        stride=24, # every day
-        target_col_name="agg_valor",
-        scale=True,
-        exog_cols=EXOG_COLS
-    )
-
-    train_dataloader = data.DataLoader(
-        train_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        drop_last=False
-    )
-
-    val_dataloader = data.DataLoader(
-        val_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        drop_last=False
-    )
-
-    test_dataloader = data.DataLoader(
-        test_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        drop_last=False
-    )
-    print("Datasets created.")
-    
-    print("Creating model and trainer...")
-    seq_len = WINDOW_SIZE
-    pred_len = HORIZON
-    model = Autoformer(
-        seq_len=seq_len,
-        label_len=LABEL_LEN,
-        pred_len=pred_len,
-        c_out=1,
-        enc_in=1,
-        dec_in=1,
-        d_model=256,
-        n_heads=4,
-        d_ff=1024,
-        e_layers=3,
-        d_layers=2,
-        dropout=0,
-        factor=2,
-        d_mark=6  # 4 time features (month, day, weekday, hour) + 1 temperature col + 1 holiday col
-    )
-    trainer = Trainer(
-        model=model,
-        window_stride_in_days=1,
-        all_dataset=all_dataset,
-        train_loader=train_dataloader,
-        val_loader=val_dataloader,
-        test_loader=test_dataloader,
-        seq_len=seq_len,
-        label_len=LABEL_LEN,
-        pred_len=pred_len,
-        output_attention=False,
-        device_name=os.getenv("DEVICE_NAME") #mps for mac and cuda for gpu
-    )
-
-    checkpoint_path = Path("checkpoints")
-    patience = 25
-    lr = 0.00001 
-    train_epochs = 1
-    setting = 'patience_{}_lr_{}_epochs_{}'.format(
-        patience,
-        lr,
-        train_epochs
-    )
-    path = checkpoint_path / setting
-    if not os.path.exists(path):
-        os.makedirs(path)
-    if train:
-        print("Starting training...")
-        trainer.train(
-            patience=patience,
-            verbose=True,
-            learning_rate=lr,
-            train_epochs=train_epochs,
-            checkpoint_path=path
+        con = ddb.connect(database=os.getenv("DB_PATH"))
+        ts_agg_region = con.execute(query).fetchdf()
+        print(f"Cantidad de registros totales en todos los departamentos agregados: {len(ts_agg_region)}")
+        con.close()
+        print ("Creating datasets...")
+        region_data = ts_agg_region
+        # Train & Test DataLoader
+        
+        all_dataset, train_dataset, val_dataset, test_dataset = data_splitter(
+            df=region_data,
+            windows_size=WINDOW_SIZE,
+            horizon=HORIZON,
+            label_len=LABEL_LEN,
+            stride=24, # every day
+            target_col_name="agg_valor",
+            scale=True,
+            exog_cols=EXOG_COLS
         )
-        print("Training finished.")
-    print("Starting testing...")
-    plots_path = Path('results') / path / f'graficas.pdf'
+
+        train_dataloader = data.DataLoader(
+            train_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            drop_last=False
+        )
+
+        val_dataloader = data.DataLoader(
+            val_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            drop_last=False
+        )
+
+        test_dataloader = data.DataLoader(
+            test_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            drop_last=False
+        )
+        print("Datasets created.")
+        
+        print("Creating model and trainer...")
+        seq_len = WINDOW_SIZE
+        pred_len = HORIZON.length
+        model = Autoformer(
+            seq_len=seq_len,
+            label_len=LABEL_LEN,
+            pred_len=pred_len,
+            c_out=1,
+            enc_in=1,
+            dec_in=1,
+            d_model=256,
+            n_heads=4,
+            d_ff=1024,
+            e_layers=3,
+            d_layers=2,
+            dropout=0,
+            factor=2,
+            d_mark=8  # 4 time features (month, day, weekday, hour) + 3 temperature col + 1 holiday col
+        )
+        trainer = Trainer(
+            model=model,
+            window_stride_in_days=1,
+            all_dataset=all_dataset,
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            test_loader=test_dataloader,
+            seq_len=seq_len,
+            label_len=LABEL_LEN,
+            pred_len=pred_len,
+            output_attention=False,
+            device_name=os.getenv("DEVICE_NAME") #mps for mac and cuda for gpu
+        )
+
+        checkpoint_path = Path("checkpoints") / region.code
+        patience = 50
+        lr = 0.00001 
+        train_epochs = 300
+        setting = 'patience_{}_lr_{}_epochs_{}'.format(
+            patience,
+            lr,
+            train_epochs
+        )
+        path = checkpoint_path / setting
+        if not os.path.exists(path):
+            os.makedirs(path)
+        if train:
+            print(f"Starting training for region {region.code}...")
+            trainer.train(
+                patience=patience,
+                verbose=True,
+                learning_rate=lr,
+                train_epochs=train_epochs,
+                checkpoint_path=path
+            )
+            print("Training finished.")
+        print("Starting testing...")
+        plots_path = Path('results') / path / f'graficas.pdf'
+        plots_path.parent.mkdir(parents=True, exist_ok=True)
+        with PdfPages(plots_path) as pdf:
+            trainer.predict_series(
+                pdf=pdf,
+                checkpoint_path=path,
+                rolling_step=0,
+                load= not train
+            )
+            y_preds_flat, y_reals_flat = trainer.predict_series(
+                pdf=pdf,
+                checkpoint_path=path,
+                rolling_step=24 * 1,
+                load= not train
+            )
+            y_preds_flat_results.append(y_preds_flat)
+            y_reals_flat_results.append(y_reals_flat)
+            trainer.predict_windows(
+                pdf=pdf,
+                checkpoint_path=path,
+                rolling_step=0,
+                load= not train
+            )
+            # trainer.predict_windows(
+            #     pdf=pdf,
+            #     checkpoint_path=path,
+            #     rolling_step=24 * 1,
+            #     load= not train
+            # )
+    plots_path = Path('results') / clustering_type / f'graficas.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
+    # need to sum all the y_preds_flat_results and y_reals_flat_results element-wise before flattening, since we want to compare the sum of the predictions of all regions with the sum of the real values of all regions
+    y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
+    y_reals_flat = np.sum(np.array(y_reals_flat_results), axis=0).flatten()
     with PdfPages(plots_path) as pdf:
-        trainer.predict_series(
-            pdf=pdf,
-            checkpoint_path=path,
-            rolling_step=0,
-            load= not train
+        Trainer.plot_and_print_ys(
+            pdf=pdf, 
+            y_preds_flat=y_preds_flat, 
+            y_reals_flat=y_reals_flat,
+            rolling_step=24 * 1
         )
-        trainer.predict_series(
-            pdf=pdf,
-            checkpoint_path=path,
-            rolling_step=24 * 1,
-            load= not train
-        )
-        trainer.predict_windows(
-            pdf=pdf,
-            checkpoint_path=path,
-            rolling_step=0,
-            load= not train
-        )
-        # trainer.predict_windows(
-        #     pdf=pdf,
-        #     checkpoint_path=path,
-        #     rolling_step=24 * 1,
-        #     load= not train
-        # )
         
 
 

@@ -484,6 +484,17 @@ class Trainer:
         y_preds_flat = np.array(y_preds).flatten()
         y_reals_flat = np.array(y_reals).flatten()
 
+        Trainer.plot_and_print_ys(pdf, y_preds_flat, y_reals_flat, rolling_step)
+
+        return y_preds_flat, y_reals_flat
+    
+    @staticmethod
+    def plot_and_print_ys(
+        pdf: PdfPages,
+        y_preds_flat: npt.NDArray[np.float32],
+        y_reals_flat: npt.NDArray[np.float32],
+        rolling_step: int
+    ):
         mse = np.mean((y_preds_flat - y_reals_flat) ** 2)
         mae = np.mean(np.abs(y_preds_flat - y_reals_flat))
         # MAPE: avoid division by zero by masking near-zero real values
@@ -500,8 +511,6 @@ class Trainer:
         plt.title(f"Series prediction ({mode_label}) — MSE: {mse:.4f}, MAE: {mae:.4f}, MAPE: {mape:.2f}%")
         pdf.savefig()
         plt.close()
-
-        return y_preds_flat, y_reals_flat
 
     def predict_windows(
         self,
