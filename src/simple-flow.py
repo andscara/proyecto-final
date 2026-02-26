@@ -64,6 +64,9 @@ def main(
     # """
     y_preds_flat_results = []
     y_reals_flat_results = []
+    y_windows_histories = []
+    y_windows_reals = []
+    y_windows_preds = []
     for region in Region:
         query = f"""
         select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_max + 15) / 65) as temp_max, AVG((temp_min + 15) / 65) as temp_min, AVG((temp_media + 15) / 65) as temp_media
@@ -197,12 +200,6 @@ def main(
                 rolling_step=0,
                 load= not train
             )
-            # trainer.predict_windows(
-            #     pdf=pdf,
-            #     checkpoint_path=path,
-            #     rolling_step=24 * 1,
-            #     load= not train
-            # )
     plots_path = Path('results') / clustering_type / f'graficas.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
     # need to sum all the y_preds_flat_results and y_reals_flat_results element-wise before flattening, since we want to compare the sum of the predictions of all regions with the sum of the real values of all regions

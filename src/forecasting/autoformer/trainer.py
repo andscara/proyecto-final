@@ -1,9 +1,9 @@
 import logging
 import time
+from typing import List
 import torch
 import torch.nn as nn
 from torch.utils import data
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 from forecasting.autoformer.data_loader import WindowsDataset
 from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_learning_rate
@@ -13,6 +13,7 @@ import numpy.typing as npt
 from datetime import datetime, timedelta
 import torch.nn.functional as F
 from pathlib import Path
+from prediction_window import PredictionWindow
 
 class Trainer:
     def __init__(
@@ -28,6 +29,7 @@ class Trainer:
         pred_len: int,
         output_attention: bool,
         device_name: str = 'cpu',
+        seed: int = 42
     ):
         self.model = model
         self.window_stride_in_days = window_stride_in_days
@@ -41,6 +43,7 @@ class Trainer:
         self.output_attention = output_attention
         self.device = torch.device(device_name)
         self.model.to(self.device)
+        self.rng = np.random.default_rng(seed=seed)
 
     def _predict(
         self,
@@ -196,9 +199,7 @@ class Trainer:
         verbose: bool = True,
         learning_rate: float = 0.001,
         train_epochs: int = 10,
-        rolling_step: int = 0,
-        reduce_lr_patience: int = 3,
-        reduce_lr_factor: float = 0.9,
+        rolling_step: int = 0
     ):
         time_now = time.time()
 
@@ -206,8 +207,6 @@ class Trainer:
         early_stopping = EarlyStopping(patience=patience, verbose=verbose)
 
         model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        # scheduler = ReduceLROnPlateau(model_optim, mode='min', factor=reduce_lr_factor, 
-        #                                patience=reduce_lr_patience, min_lr=1e-8)
 
         criterion = nn.MSELoss().to(self.device)
 
@@ -268,7 +267,6 @@ class Trainer:
                     epoch + 1, train_steps, train_loss, vali_loss, vali_mape))
 
             early_stopping(vali_loss, self.model, checkpoint_path)
-            # scheduler.step(vali_loss)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -512,14 +510,29 @@ class Trainer:
         pdf.savefig()
         plt.close()
 
+    def get_window_indexes(
+        self,
+        num_windows: int | None = None
+    ) -> npt.NDArray[np.int_]:
+        test_len = len(self.test_loader.dataset)
+        if num_windows is None:
+            return np.arange(test_len)
+        else:
+            window_indexes = self.rng.choice(
+                test_len,
+                size=num_windows,
+                replace=False
+            )
+        return window_indexes
+
     def predict_windows(
         self,
         pdf: PdfPages,
         checkpoint_path: Path,
         rolling_step: int = 0,
         load: bool = True,
-        windows_to_plot: int = 20
-    ):
+        windows_to_predict: int = 20
+    )->List[PredictionWindow]:
         """
         Predict each test window individually and plot history + prediction + real.
         Same parameters as predict_series.
@@ -540,13 +553,9 @@ class Trainer:
         global_mapes = []
 
         self.model.eval()
-        rng = np.random.default_rng(seed=42)
 
-        window_indexes = rng.choice(
-            len(self.test_loader.dataset),
-            size=windows_to_plot,
-            replace=False
-        )
+        window_indexes = self.get_window_indexes(windows_to_predict)
+        prediction_windows: List[PredictionWindow] = []
         with torch.no_grad():
             for window_idx in window_indexes:
                 # Find the batch that contains this window index
@@ -631,4 +640,32 @@ class Trainer:
         mean_error = np.mean(global_errors)
         mean_mape = np.mean(global_mapes)
         print(f"predict_windows ({mode_label}): Mean MSE={mean_error:.4f}, Mean MAPE={mean_mape:.2f}% over {len(global_errors)} windows")
+        return prediction_windows
 
+    def plot_prediction_windows(
+        self,
+        pdf: PdfPages,
+        prediction_windows: List[PredictionWindow],
+        mode_label: str
+    ):
+        for pw in prediction_windows:
+            start_datetime = pw.history[0][0]
+            total_len = len(pw.history[1]) + len(pw.predictions[1])
+            dates = [start_datetime + timedelta(hours=j) for j in range(total_len)]
+            plt.figure(figsize=(16, 5))
+            plt.plot(pw.history[0], pw.history[1], label="Historia", color="blue")
+            plt.plot(pw.predictions[0], pw.predictions[1], label=f"Predicción ({mode_label})", color="orange")
+            plt.plot(pw.real_values[0], pw.real_values[1], label="Real", color="green", linestyle='dashed')
+            plt.xticks(dates[::max(1, total_len // 6)], rotation=30)
+            plt.legend()
+            plt.text(
+                        0.99, 0.01,
+                        f'MSE: {error:.4f} | MAPE: {window_mape:.2f}%',
+                        transform=plt.gca().transAxes,
+                        fontsize=10,
+                        ha='right',
+                        va='bottom'
+                    )
+            plt.tight_layout()
+            pdf.savefig()
+            plt.close()
