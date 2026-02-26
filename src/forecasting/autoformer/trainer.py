@@ -13,7 +13,7 @@ import numpy.typing as npt
 from datetime import datetime, timedelta
 import torch.nn.functional as F
 from pathlib import Path
-from prediction_window import PredictionWindow
+from forecasting.autoformer.prediction_window import PredictionWindow
 
 class Trainer:
     def __init__(
@@ -28,8 +28,7 @@ class Trainer:
         label_len: int,
         pred_len: int,
         output_attention: bool,
-        device_name: str = 'cpu',
-        seed: int = 42
+        device_name: str = 'cpu'
     ):
         self.model = model
         self.window_stride_in_days = window_stride_in_days
@@ -43,7 +42,6 @@ class Trainer:
         self.output_attention = output_attention
         self.device = torch.device(device_name)
         self.model.to(self.device)
-        self.rng = np.random.default_rng(seed=seed)
 
     def _predict(
         self,
@@ -510,29 +508,12 @@ class Trainer:
         pdf.savefig()
         plt.close()
 
-    def get_window_indexes(
-        self,
-        num_windows: int | None = None
-    ) -> npt.NDArray[np.int_]:
-        test_len = len(self.test_loader.dataset)
-        if num_windows is None:
-            return np.arange(test_len)
-        else:
-            window_indexes = self.rng.choice(
-                test_len,
-                size=num_windows,
-                replace=False
-            )
-        return window_indexes
-
     def predict_windows(
         self,
-        pdf: PdfPages,
         checkpoint_path: Path,
         rolling_step: int = 0,
-        load: bool = True,
-        windows_to_predict: int = 20
-    )->List[PredictionWindow]:
+        load: bool = True
+    ) -> List[PredictionWindow]:
         """
         Predict each test window individually and plot history + prediction + real.
         Same parameters as predict_series.
@@ -547,19 +528,14 @@ class Trainer:
             self.model.load_state_dict(torch.load(best_model_path))
 
         use_rolling = rolling_step > 0
-        mode_label = f"rolling-{rolling_step}" if use_rolling else "single-shot"
-
-        global_errors = []
-        global_mapes = []
 
         self.model.eval()
 
-        window_indexes = self.get_window_indexes(windows_to_predict)
         prediction_windows: List[PredictionWindow] = []
         with torch.no_grad():
-            for window_idx in window_indexes:
+            for idx in range(len(self.test_loader.dataset)):
                 # Find the batch that contains this window index
-                batch_x, batch_y, batch_x_mark, batch_y_mark = self.test_loader.dataset[window_idx]
+                batch_x, batch_y, batch_x_mark, batch_y_mark = self.test_loader.dataset[idx]
                 
                 batch_x = torch.tensor(batch_x, device=self.device)
                 batch_y = torch.tensor(batch_y, device=self.device)
@@ -577,13 +553,6 @@ class Trainer:
                     rolling=use_rolling, rolling_step=rolling_step
                 )
 
-                # Compute per-item MSE over the full pred_len
-                mse_per_item = F.mse_loss(
-                    outputs,
-                    real_y,
-                    reduction='none'
-                ).mean(dim=(1, 2))
-
                 # Inverse scale for plotting
                 x_hist = batch_x[:, :, 0:1].detach().cpu().numpy()
                 x_hist = self._inverse_scale(x_hist, self.train_loader.dataset.scaler)
@@ -598,16 +567,10 @@ class Trainer:
 
                 # Plot each item in the batch
                 for b in range(batch_x.shape[0]):
-                    error = mse_per_item[b].item()
-                    global_errors.append(error)
 
                     hist = x_hist[b, :, 0]  # (seq_len,)
                     pred = y_pred[b, :, 0]  # (pred_len,)
                     real = real_y_np[b, :, 0]  # (pred_len,)
-
-                    # Per-window MAPE
-                    nonzero = np.abs(real) > 1e-8
-                    window_mape = np.mean(np.abs((real[nonzero] - pred[nonzero]) / real[nonzero])) * 100
 
                     # Build datetime axis
                     ts = timestamps[b]  # (seq_len, d_mark)
@@ -616,42 +579,55 @@ class Trainer:
                     )
                     total_len = len(hist) + self.pred_len
                     dates = [start_datetime + timedelta(hours=j) for j in range(total_len)]
+                
 
-                    plt.figure(figsize=(16, 5))
-                    plt.plot(dates[:self.seq_len], hist, label="Historia", color="blue")
-                    plt.plot(dates[self.seq_len:], pred, label=f"Predicción ({mode_label})", color="orange")
-                    plt.plot(dates[self.seq_len:], real, label="Real", color="green", linestyle='dashed')
-                    plt.xticks(dates[::max(1, total_len // 6)], rotation=30)
-                    plt.legend()
-                    plt.text(
-                        0.99, 0.01,
-                        f'MSE: {error:.4f} | MAPE: {window_mape:.2f}%',
-                        transform=plt.gca().transAxes,
-                        fontsize=10,
-                        ha='right',
-                        va='bottom'
-                    )
-                    plt.tight_layout()
-                    pdf.savefig()
-                    plt.close()
-
-                    global_mapes.append(window_mape)
-
-        mean_error = np.mean(global_errors)
-        mean_mape = np.mean(global_mapes)
-        print(f"predict_windows ({mode_label}): Mean MSE={mean_error:.4f}, Mean MAPE={mean_mape:.2f}% over {len(global_errors)} windows")
+                    # Build PredictionWindow
+                    history_dates = dates[:self.seq_len]
+                    pred_dates = dates[self.seq_len:]
+                    prediction_windows.append(PredictionWindow(
+                        history=(history_dates, hist),
+                        predictions=(pred_dates, pred),
+                        real_values=(pred_dates, real),
+                    ))
         return prediction_windows
 
+    @staticmethod
     def plot_prediction_windows(
-        self,
         pdf: PdfPages,
         prediction_windows: List[PredictionWindow],
-        mode_label: str
+        rolling_step: int = 0,
+        seed: int = 42,
+        windows_to_predict: int = 20
     ):
-        for pw in prediction_windows:
+        global_errors = []
+        global_mapes = []
+
+        mode_label = f"rolling-{rolling_step}" if rolling_step > 0 else "single-shot"
+
+        test_len = len(prediction_windows)
+        rng = np.random.default_rng(seed=seed)
+        window_indexes = rng.choice(
+            test_len,
+            size=windows_to_predict,
+            replace=False
+        )
+
+        for index in window_indexes:
+            pw = prediction_windows[index]
             start_datetime = pw.history[0][0]
             total_len = len(pw.history[1]) + len(pw.predictions[1])
             dates = [start_datetime + timedelta(hours=j) for j in range(total_len)]
+
+            pred = np.asarray(pw.predictions[1])
+            real = np.asarray(pw.real_values[1])
+
+            error = float(np.mean((pred - real) ** 2))
+            nonzero = np.abs(real) > 1e-8
+            window_mape = float(np.mean(np.abs((real[nonzero] - pred[nonzero]) / real[nonzero])) * 100)
+
+            global_errors.append(error)
+            global_mapes.append(window_mape)
+
             plt.figure(figsize=(16, 5))
             plt.plot(pw.history[0], pw.history[1], label="Historia", color="blue")
             plt.plot(pw.predictions[0], pw.predictions[1], label=f"Predicción ({mode_label})", color="orange")
@@ -659,13 +635,17 @@ class Trainer:
             plt.xticks(dates[::max(1, total_len // 6)], rotation=30)
             plt.legend()
             plt.text(
-                        0.99, 0.01,
-                        f'MSE: {error:.4f} | MAPE: {window_mape:.2f}%',
-                        transform=plt.gca().transAxes,
-                        fontsize=10,
-                        ha='right',
-                        va='bottom'
-                    )
+                0.99, 0.01,
+                f'MSE: {error:.4f} | MAPE: {window_mape:.2f}%',
+                transform=plt.gca().transAxes,
+                fontsize=10,
+                ha='right',
+                va='bottom'
+            )
             plt.tight_layout()
             pdf.savefig()
             plt.close()
+
+        mean_error = np.mean(global_errors)
+        mean_mape = np.mean(global_mapes)
+        print(f"plot_prediction_windows ({mode_label}): Mean MSE={mean_error:.4f}, Mean MAPE={mean_mape:.2f}% over {len(global_errors)} windows")

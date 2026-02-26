@@ -3,12 +3,14 @@
 from tabnanny import check
 import time
 import duckdb as ddb
+from matplotlib import pyplot as plt
 from numpy import c_
 import pandas as pd
 import os
 from matplotlib.backends.backend_pdf import PdfPages
 
 from forecasting.autoformer.autoformer import Autoformer
+from forecasting.autoformer.prediction_window import PredictionWindow
 from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
 from forecasting.autoformer.data_loader import data_splitter
@@ -18,6 +20,9 @@ import os
 import horizon as h
 from enum import Enum
 import numpy as np
+from typing import List
+
+from runner import predict
 
 
 load_dotenv()
@@ -64,9 +69,7 @@ def main(
     # """
     y_preds_flat_results = []
     y_reals_flat_results = []
-    y_windows_histories = []
-    y_windows_reals = []
-    y_windows_preds = []
+    global_prediction_windows: List[PredictionWindow] = []
     for region in Region:
         query = f"""
         select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_max + 15) / 65) as temp_max, AVG((temp_min + 15) / 65) as temp_min, AVG((temp_media + 15) / 65) as temp_media
@@ -194,26 +197,57 @@ def main(
             )
             y_preds_flat_results.append(y_preds_flat)
             y_reals_flat_results.append(y_reals_flat)
-            trainer.predict_windows(
-                pdf=pdf,
+            region_prediction_windows: List[PredictionWindow] = trainer.predict_windows(
                 checkpoint_path=path,
                 rolling_step=0,
                 load= not train
             )
+            # We need to agregate each item in the existing global_prediction_windows with the corresponding item in the region_prediction_windows
+            if len(global_prediction_windows) == 0:
+                global_prediction_windows = region_prediction_windows
+            else:
+                global_prediction_windows = [
+                    pw_global.aggregate(pw_region)
+                    for pw_global, pw_region in zip(global_prediction_windows, region_prediction_windows)
+                ]
+            Trainer.plot_prediction_windows(
+                pdf=pdf,
+                prediction_windows=region_prediction_windows,
+                rolling_step=0
+            )
+            
     plots_path = Path('results') / clustering_type / f'graficas.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
     # need to sum all the y_preds_flat_results and y_reals_flat_results element-wise before flattening, since we want to compare the sum of the predictions of all regions with the sum of the real values of all regions
     y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
     y_reals_flat = np.sum(np.array(y_reals_flat_results), axis=0).flatten()
     with PdfPages(plots_path) as pdf:
+        # Calculate the error metrics for the aggregated predictions and print them in the pdf as text
+        error = np.mean(np.abs(y_reals_flat - y_preds_flat))
+        mape = np.mean(np.abs((y_reals_flat - y_preds_flat) / y_reals_flat)) * 100
+        print(f"Global MAE: {error:.4f}")
+        print(f"Global MAPE: {mape:.2f}%")
+        plt.figure(figsize=(10, 6))
+        plt.text(0.1, 0.5, f"Global MAE: {error:.4f}\nGlobal MAPE: {mape:.2f}%", fontsize=12)
+        plt.title("Global Error Metrics", fontsize=16)
+        plt.axis('off')
+        pdf.savefig()
+        plt.close()
+        # Plot the entire aggregated predictions vs real values
         Trainer.plot_and_print_ys(
             pdf=pdf, 
             y_preds_flat=y_preds_flat, 
             y_reals_flat=y_reals_flat,
             rolling_step=24 * 1
         )
+        # Plot the aggregated prediction windows
+        Trainer.plot_prediction_windows(
+            pdf=pdf,
+            prediction_windows=global_prediction_windows,
+            rolling_step=0
+        )
         
 
 
 if __name__ == "__main__":
-    main(train=True)
+    main(train=False)

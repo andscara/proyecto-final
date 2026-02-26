@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Any
@@ -6,9 +8,9 @@ import numpy as np
 @dataclass
 class PredictionWindow:
     """Data class for storing window prediction results with dates."""
-    history: tuple[List[datetime], np.ndarray[Any, np.float32]]
-    predictions: tuple[List[datetime], np.ndarray[Any, np.float32]]
-    real_values: tuple[List[datetime], np.ndarray[Any, np.float32]]
+    history: tuple[List[datetime], np.ndarray[Any, np.dtype[np.float32]]]
+    predictions: tuple[List[datetime], np.ndarray[Any, np.dtype[np.float32]]]
+    real_values: tuple[List[datetime], np.ndarray[Any, np.dtype[np.float32]]]
 
     def __post_init__(self):
         # Ensure that the dates and values have the same length for history, predictions, and real_values
@@ -21,7 +23,7 @@ class PredictionWindow:
     def aggregate(
         self,
         other: PredictionWindow
-    ):
+    ) -> PredictionWindow:
         """Aggregate another PredictionWindow with this one."""
         # Ensure that dates in history, predictions, and real_values are the same
         assert self.history[0] == other.history[0], "History dates must be the same for aggregation."
@@ -30,15 +32,15 @@ class PredictionWindow:
 
         # Aggregate history
         new_history_dates = self.history[0]
-        new_history_values = np.sum([self.history[1], other.history[1]])
+        new_history_values = self.history[1] + other.history[1]
 
         # Aggregate predictions
         new_predictions_dates = self.predictions[0]
-        new_predictions_values = np.sum([self.predictions[1], other.predictions[1]])
+        new_predictions_values = self.predictions[1] + other.predictions[1]
 
         # Aggregate real values
         new_real_values_dates = self.real_values[0]
-        new_real_values_values = np.sum([self.real_values[1], other.real_values[1]])
+        new_real_values_values = self.real_values[1] + other.real_values[1]
 
         return PredictionWindow(
             history=(new_history_dates, new_history_values),
