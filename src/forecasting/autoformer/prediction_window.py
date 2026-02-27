@@ -48,3 +48,24 @@ class PredictionWindow:
             real_values=(new_real_values_dates, new_real_values_values)
         )
     
+    @staticmethod
+    def calculate_error_metrics(
+        prediction_windows: List[PredictionWindow]
+    ) -> dict[str, Any]:
+        """Calculate error metrics for the prediction windows."""
+        mses = []
+        maes = []
+        mapes = []
+        for pw in prediction_windows:
+            y_reals = pw.real_values[1]
+            y_preds = pw.predictions[1]
+            mses.append(float(np.mean((y_reals - y_preds) ** 2)))
+            maes.append(float(np.mean(np.abs(y_reals - y_preds))))
+            mapes.append(np.mean(np.abs((y_reals - y_preds) / y_reals)) * 100)
+        return {
+            'mse': np.mean(mses),
+            'mae': np.mean(maes),
+            'mape': np.mean(mapes)
+        }
+        
+    

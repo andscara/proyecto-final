@@ -222,13 +222,13 @@ def main(
     y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
     y_reals_flat = np.sum(np.array(y_reals_flat_results), axis=0).flatten()
     with PdfPages(plots_path) as pdf:
-        # Calculate the error metrics for the aggregated predictions and print them in the pdf as text
-        error = np.mean(np.abs(y_reals_flat - y_preds_flat))
-        mape = np.mean(np.abs((y_reals_flat - y_preds_flat) / y_reals_flat)) * 100
-        print(f"Global MAE: {error:.4f}")
-        print(f"Global MAPE: {mape:.2f}%")
+        # Calculate the error metrics for the aggregated predictions and print them in the pdf as text, using the global_prediction_windows to calculate the error metrics for each window and then averaging them to get the global error metrics
+        errors = PredictionWindow.calculate_error_metrics(global_prediction_windows)
+        mse = errors['mse']
+        mae = errors['mae']
+        mape = errors['mape']
         plt.figure(figsize=(10, 6))
-        plt.text(0.1, 0.5, f"Global MAE: {error:.4f}\nGlobal MAPE: {mape:.2f}%", fontsize=12)
+        plt.text(0.1, 0.5, f"Global MSE: {mse:.4f}\nGlobal MAE: {mae:.4f}\nGlobal MAPE: {mape:.2f}%", fontsize=12)
         plt.title("Global Error Metrics", fontsize=16)
         plt.axis('off')
         pdf.savefig()
