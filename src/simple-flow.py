@@ -141,7 +141,8 @@ def main(
             d_layers=2,
             dropout=0,
             factor=2,
-            d_mark=8  # 4 time features (month, day, weekday, hour) + 3 temperature col + 1 holiday col
+            d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
+            exog_c_in=3 # 3 temperature columns (temp_max, temp_min, temp_media)
         )
         trainer = Trainer(
             model=model,
@@ -250,4 +251,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False)
+    main(train=True)

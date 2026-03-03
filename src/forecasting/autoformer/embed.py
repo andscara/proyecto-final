@@ -156,7 +156,6 @@ class DataEmbedding_wo_pos(nn.Module):
         super(DataEmbedding_wo_pos, self).__init__()
 
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
-        self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type,
                                                     freq=freq) if embed_type != 'timeF' else TimeFeatureEmbedding(
             d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
@@ -164,4 +163,21 @@ class DataEmbedding_wo_pos(nn.Module):
 
     def forward(self, x, x_mark):
         x = self.value_embedding(x) + self.temporal_embedding(x_mark)
+        return self.dropout(x)
+    
+class DataEmbedding_with_exog(nn.Module):
+    def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1, d_mark: int | None = None, exog_c_in: int = 0):
+        super(DataEmbedding_with_exog, self).__init__()
+        self.d_mark = d_mark
+        self.exog_c_in = exog_c_in
+
+        self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
+        self.exog_embedding = TokenEmbedding(c_in=exog_c_in, d_model=d_model)
+        self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type,
+                                                    freq=freq) if embed_type != 'timeF' else TimeFeatureEmbedding(
+            d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark):
+        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
         return self.dropout(x)

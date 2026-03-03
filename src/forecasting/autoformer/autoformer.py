@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from forecasting.autoformer.auto_correlation import AutoCorrelation, AutoCorrelationLayer
-from forecasting.autoformer.embed import DataEmbedding_wo_pos
+from forecasting.autoformer.embed import DataEmbedding_with_exog, DataEmbedding_wo_pos
 from forecasting.autoformer.encoder_decoder import Decoder, DecoderLayer, Encoder, EncoderLayer, MyLayernorm, SeriesDecomp
 
 
@@ -32,6 +32,7 @@ class Autoformer(nn.Module):
             d_layers: int = 1,
             c_out: int = 7,
             d_mark: int | None = None,
+            exog_c_in: int = 0
     ):
         """
         Autoformer constructor
@@ -67,10 +68,10 @@ class Autoformer(nn.Module):
         # Embedding
         # The series-wise connection inherently contains the sequential information.
         # Thus, we can discard the position embedding of transformers.
-        self.enc_embedding = DataEmbedding_wo_pos(enc_in, d_model, embed, freq,
-                                                  dropout, d_mark=d_mark)
-        self.dec_embedding = DataEmbedding_wo_pos(dec_in, d_model, embed, freq,
-                                                  dropout, d_mark=d_mark)
+        self.enc_embedding = DataEmbedding_with_exog(enc_in, d_model, embed, freq,
+                                                  dropout, d_mark=d_mark, exog_c_in=exog_c_in)
+        self.dec_embedding = DataEmbedding_with_exog(dec_in, d_model, embed, freq,
+                                                  dropout, d_mark=d_mark, exog_c_in=exog_c_in)
 
         # Encoder
         self.encoder = Encoder(
