@@ -114,10 +114,10 @@ def get_cluster_timeseries(con: ddb.DuckDBPyConnection, client_ids: np.ndarray, 
     unique_clusters = sorted(cluster_map['cluster'].unique())
 
     cluster_ts: dict[int, pd.DataFrame] = {}
+    # Load cluster_map into DuckDB for joining
+    con.register('cluster_map', cluster_map)
     for cluster_id in unique_clusters:
         ids_in_cluster = cluster_map[cluster_map['cluster'] == cluster_id]['id'].tolist()
-        ids_tuple = tuple(ids_in_cluster) if len(ids_in_cluster) > 1 else f"('{ids_in_cluster[0]}')"
-
         query = f"""
         SELECT e.dia, e.hora, SUM(agg_valor) AS agg_valor,
                AVG((temp_max + 15) / 65) AS temp_max,
@@ -125,8 +125,8 @@ def get_cluster_timeseries(con: ddb.DuckDBPyConnection, client_ids: np.ndarray, 
                AVG((temp_media + 15) / 65) AS temp_media
         FROM (
             SELECT departamento, dia, hora, SUM(valor) AS agg_valor
-            FROM read_parquet('{PATH}')
-            WHERE id IN {ids_tuple}
+            FROM read_parquet('{PATH}') i inner JOIN cluster_map cm ON i.id = cm.id
+            WHERE cm.cluster = {cluster_id}
             GROUP BY departamento, dia, hora
         ) e INNER JOIN temperatura_departamento t ON e.dia = t.dia AND e.departamento = t.departamento
         GROUP BY e.dia, e.hora
@@ -318,4 +318,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False)
+    main(train=True)
