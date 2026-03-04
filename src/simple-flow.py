@@ -37,15 +37,41 @@ EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 
 class Region(Enum):
     NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
+    # SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    # EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    # WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    # MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
 
     def __init__(self, code: str, departamentos: list[str]):
         self.code = code
         self.departamentos = departamentos
 
+
+def print_test_metrics(
+    predictions: List[PredictionWindow],
+    prefix: str,
+    pdf: PdfPages,
+):
+    # Calculate the error metrics for the aggregated predictions and print them in the pdf as text, using the global_prediction_windows to calculate the error metrics for each window and then averaging them to get the global error metrics
+    errors = PredictionWindow.calculate_error_metrics(predictions)
+    plt.figure(figsize=(10, 6))
+    metrics_pattern = f"""
+    {prefix} MSE: {errors['mse']:.4f} 
+    {prefix} MIN MSE: {errors['min_mse']:.4f} 
+    {prefix} MAX MSE: {errors['max_mse']:.4f}\n
+    {prefix} MAE: {errors['mae']:.4f} 
+    {prefix} MIN MAE: {errors['min_mae']:.4f} 
+    {prefix} MAX MAE: {errors['max_mae']:.4f}\n
+    {prefix} MAPE: {errors['mape']:.2f} 
+    {prefix} MIN MAPE: {errors['min_mape']:.2f} 
+    {prefix} MAX MAPE: {errors['max_mape']:.2f}\n
+    """
+
+    plt.text(0.1, 0.5, metrics_pattern, fontsize=12)
+    plt.title(f"{prefix} Error Metrics", fontsize=16)
+    plt.axis('off')
+    pdf.savefig()
+    plt.close()
 
 def main(
     train: bool = True,
@@ -160,7 +186,7 @@ def main(
         checkpoint_path = Path("checkpoints") / region.code
         patience = 50
         lr = 0.00001 
-        train_epochs = 300
+        train_epochs = 1
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
@@ -215,6 +241,11 @@ def main(
                 prediction_windows=region_prediction_windows,
                 rolling_step=0
             )
+            print_test_metrics(
+                predictions=region_prediction_windows,
+                prefix=f"{clustering_type} - {region.code}",
+                pdf=pdf
+            )
             
     plots_path = Path('results') / clustering_type / f'graficas.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
@@ -222,17 +253,11 @@ def main(
     y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
     y_reals_flat = np.sum(np.array(y_reals_flat_results), axis=0).flatten()
     with PdfPages(plots_path) as pdf:
-        # Calculate the error metrics for the aggregated predictions and print them in the pdf as text, using the global_prediction_windows to calculate the error metrics for each window and then averaging them to get the global error metrics
-        errors = PredictionWindow.calculate_error_metrics(global_prediction_windows)
-        mse = errors['mse']
-        mae = errors['mae']
-        mape = errors['mape']
-        plt.figure(figsize=(10, 6))
-        plt.text(0.1, 0.5, f"Global MSE: {mse:.4f}\nGlobal MAE: {mae:.4f}\nGlobal MAPE: {mape:.2f}%", fontsize=12)
-        plt.title("Global Error Metrics", fontsize=16)
-        plt.axis('off')
-        pdf.savefig()
-        plt.close()
+        print_test_metrics(
+            predictions=global_prediction_windows,
+            prefix=f"{clustering_type} - Global",
+            pdf=pdf
+        )
         # Plot the entire aggregated predictions vs real values
         Trainer.plot_and_print_ys(
             pdf=pdf, 
@@ -250,4 +275,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False)
+    main(train=True)
