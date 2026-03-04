@@ -27,9 +27,9 @@ from runner import predict
 
 load_dotenv()
 PATH = os.getenv("DATA_PATH")
-WINDOW_SIZE = 24*7*2 # 2 weeks
-HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 1 week
-BATCH_SIZE = 64
+WINDOW_SIZE = 24*7 # 2 weeks
+HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24) # 1 day
+BATCH_SIZE = 128
 LABEL_LEN = WINDOW_SIZE
 
 EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
@@ -134,11 +134,11 @@ def main(
             c_out=1,
             enc_in=1,
             dec_in=1,
-            d_model=256,
+            d_model=128,
             n_heads=4,
-            d_ff=1024,
-            e_layers=3,
-            d_layers=2,
+            d_ff=512,
+            e_layers=2,
+            d_layers=1,
             dropout=0,
             factor=2,
             d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
@@ -160,7 +160,7 @@ def main(
 
         checkpoint_path = Path("checkpoints") / region.code
         patience = 50
-        lr = 0.00001 
+        lr = 0.0001 
         train_epochs = 300
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
