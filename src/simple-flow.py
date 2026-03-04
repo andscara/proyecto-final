@@ -28,7 +28,7 @@ from runner import predict
 load_dotenv()
 PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7 # 2 weeks
-HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24) # 1 day
+HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 1 day
 BATCH_SIZE = 128
 LABEL_LEN = WINDOW_SIZE
 
@@ -36,10 +36,10 @@ EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    # NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    # SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    # EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    # WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
     MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
 
     def __init__(self, code: str, departamentos: list[str]):
@@ -135,12 +135,12 @@ def main(
             enc_in=1,
             dec_in=1,
             d_model=128,
-            n_heads=4,
-            d_ff=512,
+            n_heads=2,
+            d_ff=256,
             e_layers=2,
             d_layers=1,
             dropout=0,
-            factor=2,
+            factor=5,
             d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
             exog_c_in=3 # 3 temperature columns (temp_max, temp_min, temp_media)
         )
@@ -160,7 +160,7 @@ def main(
 
         checkpoint_path = Path("checkpoints") / region.code
         patience = 50
-        lr = 0.0001 
+        lr = 0.00003 
         train_epochs = 300
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
