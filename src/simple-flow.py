@@ -37,10 +37,10 @@ EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 
 class Region(Enum):
     NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    # SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    # EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    # WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    # MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
+    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
 
     def __init__(self, code: str, departamentos: list[str]):
         self.code = code
@@ -186,7 +186,7 @@ def main(
         checkpoint_path = Path("checkpoints") / region.code
         patience = 50
         lr = 0.00001 
-        train_epochs = 1
+        train_epochs = 300
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
