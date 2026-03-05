@@ -53,6 +53,32 @@ class Region(Enum):
         self.code = code
         self.departamentos = departamentos
 
+def print_test_metrics(
+    predictions: List[PredictionWindow],
+    prefix: str,
+    pdf: PdfPages,
+):
+    # Calculate the error metrics for the aggregated predictions and print them in the pdf as text, using the global_prediction_windows to calculate the error metrics for each window and then averaging them to get the global error metrics
+    errors = PredictionWindow.calculate_error_metrics(predictions)
+    plt.figure(figsize=(10, 6))
+    metrics_pattern = f"""
+    {prefix} MSE: {errors['mse']:.4f} 
+    {prefix} MIN MSE: {errors['min_mse']:.4f} 
+    {prefix} MAX MSE: {errors['max_mse']:.4f}\n
+    {prefix} MAE: {errors['mae']:.4f} 
+    {prefix} MIN MAE: {errors['min_mae']:.4f} 
+    {prefix} MAX MAE: {errors['max_mae']:.4f}\n
+    {prefix} MAPE: {errors['mape']:.2f} 
+    {prefix} MIN MAPE: {errors['min_mape']:.2f} 
+    {prefix} MAX MAPE: {errors['max_mape']:.2f}\n
+    """
+
+    plt.text(0.1, 0.5, metrics_pattern, fontsize=12)
+    plt.title(f"{prefix} Error Metrics", fontsize=16)
+    plt.axis('off')
+    pdf.savefig()
+    plt.close()
+
 
 def build_client_vectors(con: ddb.DuckDBPyConnection, region: Region) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -65,8 +91,12 @@ def build_client_vectors(con: ddb.DuckDBPyConnection, region: Region) -> tuple[n
     """
     query = f"""
         SELECT id, month(dia) AS mes, dayofweek(dia) AS dia_semana, hora, AVG(valor) AS valor
-        FROM read_parquet('{PATH}')
-        where departamento in {tuple(region.departamentos)}
+        FROM (
+            SELECT id, dia, hora,
+                COALESCE(valor / NULLIF(SUM(valor) OVER (PARTITION BY id, dia), 0), 0) as valor
+            FROM read_parquet('{PATH}')
+            where departamento in {tuple(region.departamentos)}
+        )
         GROUP BY id, mes, dia_semana, hora
         ORDER BY id, mes, dia_semana, hora;
     """
@@ -81,7 +111,7 @@ def build_client_vectors(con: ddb.DuckDBPyConnection, region: Region) -> tuple[n
     vectors = np.ascontiguousarray(pivot.values, dtype=np.float32)
 
     # Normalize vectors (L2) so that K-Means uses cosine-like distances
-    faiss.normalize_L2(vectors)
+    #faiss.normalize_L2(vectors)
 
     return client_ids, vectors
 
@@ -301,16 +331,11 @@ def main(
     y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
     y_reals_flat = np.sum(np.array(y_reals_flat_results), axis=0).flatten()
     with PdfPages(plots_path) as pdf:
-        errors = PredictionWindow.calculate_error_metrics(global_prediction_windows)
-        mse = errors['mse']
-        mae = errors['mae']
-        mape = errors['mape']
-        plt.figure(figsize=(10, 6))
-        plt.text(0.1, 0.5, f"Global MSE: {mse:.4f}\nGlobal MAE: {mae:.4f}\nGlobal MAPE: {mape:.2f}%", fontsize=12)
-        plt.title("Global Error Metrics (Clustering)", fontsize=16)
-        plt.axis('off')
-        pdf.savefig()
-        plt.close()
+        print_test_metrics(
+            predictions=global_prediction_windows,
+            prefix=f"clustering - Global",
+            pdf=pdf
+        )
         Trainer.plot_and_print_ys(
             pdf=pdf,
             y_preds_flat=y_preds_flat,
