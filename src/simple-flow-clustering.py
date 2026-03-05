@@ -33,7 +33,7 @@ LABEL_LEN = WINDOW_SIZE
 
 EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 
-N_CLUSTERS = 5
+N_CLUSTERS = 4
 
 class Region(Enum):
     NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
@@ -58,8 +58,12 @@ def build_client_vectors(con: ddb.DuckDBPyConnection, region: Region) -> tuple[n
     """
     query = f"""
         SELECT id, month(dia) AS mes, dayofweek(dia) AS dia_semana, hora, AVG(valor) AS valor
-        FROM read_parquet('{PATH}')
-        where departamento in {tuple(region.departamentos)}
+        FROM (
+            SELECT id, dia, hora,
+                COALESCE(valor / NULLIF(SUM(valor) OVER (PARTITION BY id, dia), 0), 0) as valor
+            FROM read_parquet('{PATH}')
+            where departamento in {tuple(region.departamentos)}
+        )
         GROUP BY id, mes, dia_semana, hora
         ORDER BY id, mes, dia_semana, hora;
     """
@@ -74,7 +78,7 @@ def build_client_vectors(con: ddb.DuckDBPyConnection, region: Region) -> tuple[n
     vectors = np.ascontiguousarray(pivot.values, dtype=np.float32)
 
     # Normalize vectors (L2) so that K-Means uses cosine-like distances
-    faiss.normalize_L2(vectors)
+    #faiss.normalize_L2(vectors)
 
     return client_ids, vectors
 
