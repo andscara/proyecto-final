@@ -64,8 +64,14 @@ class PredictionWindow:
             mapes.append(np.mean(np.abs((y_reals - y_preds) / y_reals)) * 100)
         return {
             'mse': np.mean(mses),
+            'min_mse': np.min(mses),
+            'max_mse': np.max(mses),
             'mae': np.mean(maes),
-            'mape': np.mean(mapes)
+            'min_mae': np.min(maes),
+            'max_mae': np.max(maes),
+            'mape': np.mean(mapes),
+            'min_mape': np.min(mapes),
+            'max_mape': np.max(mapes)
         }
         
     
