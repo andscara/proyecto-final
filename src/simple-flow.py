@@ -36,10 +36,10 @@ EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    # NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    # SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    # EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    # WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
     MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
 
     def __init__(self, code: str, departamentos: list[str]):
