@@ -107,6 +107,7 @@ class TemporalEmbedding(nn.Module):
         self.weekday_embed = Embed(weekday_size, d_model)
         self.day_embed = Embed(day_size, d_model)
         self.month_embed = Embed(month_size, d_model)
+        self.holiday_embed = nn.Embedding(2, d_model) # binary holiday feature
 
     def forward(self, x):
         x = x.long()
@@ -116,8 +117,9 @@ class TemporalEmbedding(nn.Module):
         weekday_x = self.weekday_embed(x[:, :, 2])
         day_x = self.day_embed(x[:, :, 1])
         month_x = self.month_embed(x[:, :, 0])
+        holiday_x = self.holiday_embed(x[:, :, 5])
 
-        return hour_x + weekday_x + day_x + month_x + minute_x
+        return hour_x + weekday_x + day_x + month_x + minute_x + holiday_x
 
 
 class TimeFeatureEmbedding(nn.Module):
