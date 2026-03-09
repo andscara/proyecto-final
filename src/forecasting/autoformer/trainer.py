@@ -264,7 +264,7 @@ class Trainer:
                 print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Vali MAPE: {4:.2f}%".format(
                     epoch + 1, train_steps, train_loss, vali_loss, vali_mape))
 
-            early_stopping(vali_mape, self.model, checkpoint_path)
+            early_stopping(vali_loss, self.model, checkpoint_path)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break

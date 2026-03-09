@@ -27,18 +27,25 @@ HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 1 day
 BATCH_SIZE = 128
 LABEL_LEN = WINDOW_SIZE
 
-EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+# EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+EXOG_COLS = ['temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
+    # NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    # SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    # EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    # WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    MONTEVIDEO = ("MONTEVIDEO", "LAS BRUJAS", ["MONTEVIDEO"])
 
-    def __init__(self, code: str, departamentos: list[str]):
+    def __init__(
+            self, 
+            code: str, 
+            estacion: str,
+            departamentos: list[str]
+        ):
         self.code = code
+        self.estacion = estacion
         self.departamentos = departamentos
 
 
@@ -130,7 +137,7 @@ def main(
             dropout=0,
             factor=5,
             d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
-            exog_c_in=3 # 3 temperature columns (temp_max, temp_min, temp_media)
+            exog_c_in=1 # 1 temperature column (temp_media)
         )
         trainer = Trainer(
             model=model,
