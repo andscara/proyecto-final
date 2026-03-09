@@ -8,6 +8,8 @@ from numpy import c_
 import pandas as pd
 import os
 from matplotlib.backends.backend_pdf import PdfPages
+import random
+import torch
 
 from forecasting.autoformer.autoformer import Autoformer
 from forecasting.autoformer.prediction_window import PredictionWindow
@@ -37,10 +39,10 @@ EXOG_COLS = ['temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    # NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    # SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    # EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    # WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
     MONTEVIDEO = ("MONTEVIDEO", "LAS BRUJAS", ["MONTEVIDEO"])
 
     def __init__(
@@ -84,6 +86,20 @@ def main(
     train: bool = True,
     clustering_type: str = "regional"
 ):
+    # Fijar semillas para reproducibilidad
+    SEED = 42
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # Generator para DataLoaders
+    generator = torch.Generator()
+    generator.manual_seed(SEED)
+    
     # query = f"""
     # select departamento, dia, hora, SUM(valor) as agg_valor
     # from read_parquet('{PATH}')
@@ -139,21 +155,24 @@ def main(
             train_dataset,
             batch_size=BATCH_SIZE,
             shuffle=True,
-            drop_last=False
+            drop_last=False,
+            generator=generator
         )
 
         val_dataloader = data.DataLoader(
             val_dataset,
             batch_size=BATCH_SIZE,
             shuffle=False,
-            drop_last=False
+            drop_last=False,
+            generator=generator
         )
 
         test_dataloader = data.DataLoader(
             test_dataset,
             batch_size=BATCH_SIZE,
             shuffle=False,
-            drop_last=False
+            drop_last=False,
+            generator=generator
         )
         print("Datasets created.")
         
