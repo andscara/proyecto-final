@@ -32,18 +32,25 @@ HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 1 day
 BATCH_SIZE = 128
 LABEL_LEN = WINDOW_SIZE
 
-EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+# EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
+EXOG_COLS = ['temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
+    # NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    # SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    # EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    # WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    MONTEVIDEO = ("MONTEVIDEO", "LAS BRUJAS", ["MONTEVIDEO"])
 
-    def __init__(self, code: str, departamentos: list[str]):
+    def __init__(
+            self, 
+            code: str, 
+            estacion: str,
+            departamentos: list[str]
+        ):
         self.code = code
+        self.estacion = estacion
         self.departamentos = departamentos
 
 
@@ -98,14 +105,14 @@ def main(
     global_prediction_windows: List[PredictionWindow] = []
     for region in Region:
         query = f"""
-        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_max + 15) / 65) as temp_max, AVG((temp_min + 15) / 65) as temp_min, AVG((temp_media + 15) / 65) as temp_media
+        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_media + 15) / 65) as temp_media
         from (
             select departamento, dia, hora, SUM(valor) as agg_valor
             from read_parquet('{PATH}')
             where departamento in {tuple(region.departamentos)}
             group by departamento, dia, hora
-        ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
-        group by e.dia, e.hora
+        ) e inner join estaciones_temp t on e.dia=t.dia and e.hora=t.hora and t.estacion='{region.estacion}'
+        group by e.dia, e.hora, t.temp_media
         order by e.dia, e.hora
         """
 
@@ -168,7 +175,7 @@ def main(
             dropout=0,
             factor=5,
             d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
-            exog_c_in=3 # 3 temperature columns (temp_max, temp_min, temp_media)
+            exog_c_in=1 # 1 temperature column (temp_media)
         )
         trainer = Trainer(
             model=model,
