@@ -39,20 +39,18 @@ EXOG_COLS = ['temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    MONTEVIDEO = ("MONTEVIDEO", "LAS BRUJAS", ["MONTEVIDEO"])
+    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
 
     def __init__(
             self, 
             code: str, 
-            estacion: str,
             departamentos: list[str]
         ):
         self.code = code
-        self.estacion = estacion
         self.departamentos = departamentos
 
 
@@ -121,14 +119,14 @@ def main(
     global_prediction_windows: List[PredictionWindow] = []
     for region in Region:
         query = f"""
-        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_media + 15) / 65) as temp_media
+        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temperatura + 15) / 65) as temp_media
         from (
             select departamento, dia, hora, SUM(valor) as agg_valor
             from read_parquet('{PATH}')
             where departamento in {tuple(region.departamentos)}
             group by departamento, dia, hora
-        ) e inner join estaciones_temp t on e.dia=t.dia and e.hora=t.hora and t.estacion='{region.estacion}'
-        group by e.dia, e.hora, t.temp_media
+        ) e inner join temp_departamento t on e.dia=t.dia and e.hora=t.hora and t.departamento=e.departamento
+        group by e.dia, e.hora
         order by e.dia, e.hora
         """
 

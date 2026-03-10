@@ -172,7 +172,7 @@ class DataEmbedding_with_exog(nn.Module):
         super(DataEmbedding_with_exog, self).__init__()
         self.d_mark = d_mark
         self.exog_c_in = exog_c_in
-
+        self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
         self.exog_embedding = TokenEmbedding(c_in=exog_c_in, d_model=d_model)
         self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type,
@@ -181,5 +181,6 @@ class DataEmbedding_with_exog(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, x_mark):
-        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+        # x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+        x = self.value_embedding(x) + self.position_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
         return self.dropout(x)
