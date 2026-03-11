@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from numpy.typing import NDArray
 from typing import Any
 import numpy as np
+from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
 import horizon as h
 
 from runner import train
@@ -189,17 +190,11 @@ def create_windows(
 
 def data_splitter(
     df: pd.DataFrame,
-    windows_size: int,
-    horizon: h.Horizon,
-    label_len: int,
-    stride: int,
-    target_col_name: str,
-    scale: bool = True,
-    exog_cols: list[str] | None = None
+    exp_config: ExperimentConfiguration
 ) -> tuple[WindowsDataset, WindowsDataset, WindowsDataset, WindowsDataset]:
     
-    seq_len = windows_size
-    pred_len = horizon.length
+    seq_len = exp_config.windows_size
+    pred_len = exp_config.horizon.length
 
     # Divide the dataframe [start_train, end_train], [end_df_minus_1_year, end_df]
     train_df = df[df['dia'] <  pd.Timestamp('2024-09-01')]
@@ -207,33 +202,33 @@ def data_splitter(
 
     train_data_windows, train_time_features_windows, train_scaler = create_windows(
         df=train_df,
-        windows_size=windows_size,
-        horizon=horizon,
-        stride=stride,
-        target_col_name=target_col_name,
-        scale=scale,
-        exog_cols=exog_cols
+        windows_size=exp_config.windows_size,
+        horizon=exp_config.horizon,
+        stride=exp_config.stride,
+        target_col_name=exp_config.target_col_name,
+        scale=exp_config.scale,
+        exog_cols=exp_config.exog_cols
     )
 
     val_test_data_windows, val_test_time_features_windows, val_test_scaler = create_windows(
         df=val_test_df,
-        windows_size=windows_size,
-        horizon=horizon,
-        stride=stride,
-        target_col_name=target_col_name,
-        scale=scale,
-        exog_cols=exog_cols,
+        windows_size=exp_config.windows_size,
+        horizon=exp_config.horizon,
+        stride=exp_config.stride,
+        target_col_name=exp_config.target_col_name,
+        scale=exp_config.scale,
+        exog_cols=exp_config.exog_cols,
         scaler=train_scaler,
     )
 
     all_data_windows, all_time_features_windows, all_scaler = create_windows(
         df=df,
-        windows_size=windows_size,
-        horizon=horizon,
-        stride=stride,
-        target_col_name=target_col_name,
-        scale=scale,
-        exog_cols=exog_cols,
+        windows_size=exp_config.windows_size,
+        horizon=exp_config.horizon,
+        stride=exp_config.stride,
+        target_col_name=exp_config.target_col_name,
+        scale=exp_config.scale,
+        exog_cols=exp_config.exog_cols,
         scaler=train_scaler,
     )
 
@@ -241,7 +236,7 @@ def data_splitter(
         data_windows=all_data_windows,
         time_features_windows=all_time_features_windows,
         seq_len=seq_len,
-        label_len=label_len,
+        label_len=exp_config.label_len,
         pred_len=pred_len,
         scaler=all_scaler
     )
@@ -251,7 +246,7 @@ def data_splitter(
         data_windows=train_data_windows,
         time_features_windows=train_time_features_windows,
         seq_len=seq_len,
-        label_len=label_len,
+        label_len=exp_config.label_len,
         pred_len=pred_len,
         scaler=train_scaler
     )
@@ -280,7 +275,7 @@ def data_splitter(
         data_windows=val_data_windows,
         time_features_windows=val_data_time_features_windows,
         seq_len=seq_len,
-        label_len=label_len,
+        label_len=exp_config.label_len,
         pred_len=pred_len,
         scaler=val_test_scaler
     )
@@ -288,7 +283,7 @@ def data_splitter(
         data_windows=test_data_windows,
         time_features_windows=test_time_features_windows,
         seq_len=seq_len,
-        label_len=label_len,
+        label_len=exp_config.label_len,
         pred_len=pred_len,
         scaler=val_test_scaler
     )
