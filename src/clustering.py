@@ -7,9 +7,9 @@ if platform.system() == "Darwin":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     os.environ["OMP_NUM_THREADS"] = "1"
 
+import json
 import duckdb as ddb
 from matplotlib import pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 from dotenv import load_dotenv
 from pathlib import Path
@@ -77,21 +77,53 @@ def compute_elbow_curve(vectors: np.ndarray, max_k: int = MAX_CLUSTERS, n_iter: 
     return inertias
 
 
-def plot_elbow(region: Region, inertias: dict[int, float], pdf: PdfPages):
-    """Plot the elbow curve for a single region."""
-    ks = sorted(inertias.keys())
-    vals = [inertias[k] for k in ks]
+def plot_from_json(json_path: str):
+    """
+    Given the path to a JSON file saved by main(), generate elbow curve plots
+    as a PNG image in the same directory.
+    """
+    json_path = Path(json_path)
+    with open(json_path) as f:
+        all_results: dict[str, dict[str, float]] = json.load(f)
 
-    plt.figure(figsize=(12, 5))
-    plt.plot(ks, vals, "o-", linewidth=2)
-    plt.xlabel("Number of clusters (k)")
-    plt.ylabel("Inertia (sum of squared distances)")
-    plt.title(f"Elbow curve – {region.code}")
-    plt.xticks(ks)
-    plt.grid(True, linestyle="--", alpha=0.5)
+    output_dir = json_path.parent
+
+    # One PNG per region
+    for region_code, inertias in all_results.items():
+        ks = sorted(inertias.keys(), key=int)
+        vals = [inertias[k] for k in ks]
+        ks_int = [int(k) for k in ks]
+
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.plot(ks_int, vals, "o-", linewidth=2)
+        ax.set_xlabel("Number of clusters (k)")
+        ax.set_ylabel("Inertia (sum of squared distances)")
+        ax.set_title(f"Elbow curve – {region_code}")
+        ax.set_xticks(ks_int)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        plt.tight_layout()
+        out = output_dir / f"elbow_{region_code}.png"
+        fig.savefig(out, dpi=150)
+        plt.close(fig)
+        print(f"  {out}")
+
+    # Summary PNG with all regions overlaid
+    fig, ax = plt.subplots(figsize=(12, 6))
+    for region_code, inertias in all_results.items():
+        ks = sorted(inertias.keys(), key=int)
+        vals = [inertias[k] for k in ks]
+        ks_int = [int(k) for k in ks]
+        ax.plot(ks_int, vals, "o-", linewidth=2, label=region_code)
+    ax.set_xlabel("Number of clusters (k)")
+    ax.set_ylabel("Inertia (sum of squared distances)")
+    ax.set_title("Elbow curves – all regions")
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
-    pdf.savefig()
-    plt.close()
+    out = output_dir / "elbow_all_regions.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"  {out}")
 
 
 def main():
@@ -108,30 +140,19 @@ def main():
         inertias = compute_elbow_curve(vectors, max_k=MAX_CLUSTERS)
         all_results[region.code] = inertias
 
-    # Per-region elbow plots
-    pdf_path = results_dir / "elbow_curves.pdf"
-    with PdfPages(pdf_path) as pdf:
-        for region in Region:
-            plot_elbow(region, all_results[region.code], pdf)
+    # Save results as JSON
+    json_path = results_dir / "elbow_results.json"
+    # JSON keys must be strings, convert int keys
+    json_data = {
+        region_code: {str(k): v for k, v in inertias.items()}
+        for region_code, inertias in all_results.items()
+    }
+    with open(json_path, "w") as f:
+        json.dump(json_data, f, indent=2)
+    print(f"\nResults saved to {json_path}")
 
-        # Summary page with all regions overlaid
-        plt.figure(figsize=(12, 6))
-        for region in Region:
-            inertias = all_results[region.code]
-            ks = sorted(inertias.keys())
-            vals = [inertias[k] for k in ks]
-            plt.plot(ks, vals, "o-", linewidth=2, label=region.code)
-        plt.xlabel("Number of clusters (k)")
-        plt.ylabel("Inertia (sum of squared distances)")
-        plt.title("Elbow curves – all regions")
-        plt.xticks(range(2, MAX_CLUSTERS + 1))
-        plt.legend()
-        plt.grid(True, linestyle="--", alpha=0.5)
-        plt.tight_layout()
-        pdf.savefig()
-        plt.close()
-
-    print(f"\nElbow curves saved to {pdf_path}")
+    # Generate plots from the saved JSON
+    plot_from_json(str(json_path))
 
 
 if __name__ == "__main__":
