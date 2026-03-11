@@ -66,13 +66,13 @@ class RegionsExperimentHandler(BaseExperimentHandler):
         region = list(Region)[self._region_index]
         self._region_index += 1
         query = f"""
-        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_media + 15) / 65) as temp_media
+        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temperatura + 15) / 65) as temp_media
         from (
             select departamento, dia, hora, SUM(valor) as agg_valor
             from read_parquet('{self._data_path}')
             where departamento in {tuple(region.departamentos)}
             group by departamento, dia, hora
-        ) e inner join estaciones_temp t on e.dia=t.dia and e.hora=t.hora and t.departament = e.departamento
+        ) e inner join temp_departamento t on e.dia=t.dia and e.hora=t.hora and t.departamento = e.departamento
         group by e.dia, e.hora
         order by e.dia, e.hora
         """

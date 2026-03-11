@@ -25,7 +25,7 @@ from forecasting.autoformer.experiment_configuration import ExperimentConfigurat
 load_dotenv()
 PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7 # 2 weeks
-HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 1 day
+HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 7 day
 BATCH_SIZE = 128
 LABEL_LEN = WINDOW_SIZE
 
@@ -34,18 +34,20 @@ EXOG_COLS = ['temp_media']
 # EXOG_COLS = ['temperature']
 
 class Region(Enum):
-    NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    MONTEVIDEO = ("MONTEVIDEO", ["MONTEVIDEO"])
+    NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
+    SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
+    EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
+    WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
+    MONTEVIDEO = ("MONTEVIDEO", "LAS BRUJAS", ["MONTEVIDEO"])
 
     def __init__(
             self, 
             code: str, 
+            estacion: str,
             departamentos: list[str]
         ):
         self.code = code
+        self.estacion = estacion
         self.departamentos = departamentos
 
 
@@ -92,49 +94,12 @@ def main(
     # Generator para DataLoaders
     generator = torch.Generator()
     generator.manual_seed(SEED)
-    
-    # query = f"""
-    # select departamento, dia, hora, SUM(valor) as agg_valor
-    # from read_parquet('{PATH}')
-    # group by departamento, dia, hora
-    # order by departamento, dia, hora;
-    # """
 
-    # query = f"""
-    # select e.departamento, e.dia, e.hora, agg_valor, (temp_max + 15) / 65 as temp_max, (temp_min + 15) / 65 as temp_min, (temp_media + 15) / 65 as temp_media
-    # from (
-    #     select departamento, dia, hora, SUM(valor) as agg_valor
-    #     from read_parquet('{PATH}')
-    #     group by departamento, dia, hora
-    # ) e inner join temperatura_departamento t on e.dia=t.dia and e.departamento=t.departamento
-    # order by e.departamento, e.dia, e.hora
-    # """
-    y_preds_flat_results = []
-    y_reals_flat_results = []
-    global_prediction_windows: List[PredictionWindow] = []
-    for region in Region:
-        query = f"""
-        select e.dia, e.hora, SUM(agg_valor) as agg_valor, AVG((temp_media + 15) / 65) as temp_media
-        from (
-            select departamento, dia, hora, SUM(valor) as agg_valor
-            from read_parquet('{PATH}')
-            where departamento in {tuple(region.departamentos)}
-            group by departamento, dia, hora
-        ) e inner join estaciones_temp t on e.dia=t.dia and e.hora=t.hora and t.estacion='{region.estacion}'
-        group by e.dia, e.hora, t.temp_media
-        order by e.dia, e.hora
-        """
-
-        con = ddb.connect(database=os.getenv("DB_PATH"))
-        ts_agg_region = con.execute(query).fetchdf()
-        print(f"Cantidad de registros totales en todos los departamentos agregados: {len(ts_agg_region)}")
-        con.close()
-        print ("Creating datasets...")
-        region_data = ts_agg_region
-        # Train & Test DataLoader
-        
-        all_dataset, train_dataset, val_dataset, test_dataset = data_splitter(
-            df=region_data,
+    experiment_handler: BaseExperimentHandler = experiment_factory(
+        experiment_type=expiment_type,
+        db_path=os.getenv("DB_PATH"),
+        data_path=os.getenv("DATA_PATH"),
+        exp_config=ExperimentConfiguration(
             windows_size=WINDOW_SIZE,
             horizon=HORIZON,
             label_len=LABEL_LEN,
@@ -210,7 +175,7 @@ def main(
         checkpoint_path = Path("checkpoints") / experiment_group.name
         patience = 50
         lr = 0.00003 
-        train_epochs = 300
+        train_epochs = 1
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
@@ -299,4 +264,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(train=False, expiment_type=ExperimentType.REGIONS)
+    main(train=True, expiment_type=ExperimentType.REGIONS)

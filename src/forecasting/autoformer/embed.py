@@ -181,6 +181,6 @@ class DataEmbedding_with_exog(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, x_mark):
-        # x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
-        x = self.value_embedding(x) + self.position_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+        # x = self.value_embedding(x) + self.position_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
         return self.dropout(x)
