@@ -94,6 +94,43 @@ class RegionsExperimentHandler(BaseExperimentHandler):
             val_dataset=val_dataset,
             test_dataset=test_dataset
         )
+    
+class CountryExperimentHandler(BaseExperimentHandler):
+
+    def __init__(self, db_path: str, data_path: str, exp_config: ExperimentConfiguration):
+        super().__init__(db_path, data_path, exp_config)
+        self._has_next = True
+
+    def has_next(self) -> bool:
+        has_next = self._has_next
+        self._has_next = False
+        return has_next
+    
+    def next_experiment_group(self) -> ExperimentGroup:
+        query = f"""
+        select e.dia, e.hora, SUM(e.valor) as agg_valor, AVG((t.temperatura + 15) / 65) as temp_media
+        from read_parquet('{self._data_path}') e inner join temp_departamento t on e.dia=t.dia and e.hora=t.hora and t.departamento = e.departamento
+        group by e.dia, e.hora
+        order by e.dia, e.hora
+        """
+
+        con = ddb.connect(database=self._db_path)
+        ts_agg_region = con.execute(query).fetchdf()
+        print(f"Cantidad de registros totales en todo el pais: {len(ts_agg_region)}")
+        con.close()
+        print ("Creating datasets...")
+        all_dataset, train_dataset, val_dataset, test_dataset = data_splitter(
+            df=ts_agg_region,
+            exp_config=self._exp_config
+        )
+        print ("Datasets created.")
+        return ExperimentGroup(
+            name=f"Country",
+            full_dataset=all_dataset,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            test_dataset=test_dataset
+        )
 
 class ExperimentType(Enum):
     REGIONS = "regions"
@@ -110,6 +147,8 @@ def experiment_factory(
 ) -> BaseExperimentHandler:
     if experiment_type == ExperimentType.REGIONS:
         return RegionsExperimentHandler(db_path, data_path, exp_config)
+    elif experiment_type == ExperimentType.COUNTRY:
+        return CountryExperimentHandler(db_path, data_path, exp_config)
     else:
         raise ValueError(f"Experiment type {experiment_type} not supported."
 )
