@@ -91,7 +91,7 @@ class FixedEmbedding(nn.Module):
 
 
 class TemporalEmbedding(nn.Module):
-    def __init__(self, d_model, embed_type='fixed', freq='h'):
+    def __init__(self, d_model, embed_type='fixed', freq='h', use_holidays: bool = True):
         super(TemporalEmbedding, self).__init__()
 
         minute_size = 4
@@ -108,6 +108,7 @@ class TemporalEmbedding(nn.Module):
         self.day_embed = Embed(day_size, d_model)
         self.month_embed = Embed(month_size, d_model)
         self.holiday_embed = nn.Embedding(2, d_model) # binary holiday feature
+        self.use_holidays = use_holidays
 
     def forward(self, x):
         x = x.long()
@@ -117,9 +118,11 @@ class TemporalEmbedding(nn.Module):
         weekday_x = self.weekday_embed(x[:, :, 2])
         day_x = self.day_embed(x[:, :, 1])
         month_x = self.month_embed(x[:, :, 0])
-        holiday_x = self.holiday_embed(x[:, :, 5])
 
-        return hour_x + weekday_x + day_x + month_x + minute_x + holiday_x
+        x = hour_x + weekday_x + day_x + month_x + minute_x
+        if self.use_holidays:
+            x = x + self.holiday_embed(x[:, :, 5])
+        return x
 
 
 class TimeFeatureEmbedding(nn.Module):
@@ -168,19 +171,31 @@ class DataEmbedding_wo_pos(nn.Module):
         return self.dropout(x)
     
 class DataEmbedding_with_exog(nn.Module):
-    def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1, d_mark: int | None = None, exog_c_in: int = 0):
+    def __init__(
+            self, 
+            c_in,
+            d_model, 
+            embed_type='fixed', 
+            freq='h', 
+            dropout=0.1, 
+            d_mark: int | None = None, 
+            exog_c_in: int = 0,
+            use_exog_vars: bool = True
+        ):
         super(DataEmbedding_with_exog, self).__init__()
         self.d_mark = d_mark
         self.exog_c_in = exog_c_in
         self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
-        self.exog_embedding = TokenEmbedding(c_in=exog_c_in, d_model=d_model)
+        self.exog_embedding = nn.Linear(in_features=exog_c_in, out_features=d_model, bias=False)
         self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type,
-                                                    freq=freq) if embed_type != 'timeF' else TimeFeatureEmbedding(
+                                                    freq=freq, use_holidays=use_exog_vars) if embed_type != 'timeF' else TimeFeatureEmbedding(
             d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
         self.dropout = nn.Dropout(p=dropout)
+        self.use_exog_vars = use_exog_vars
 
     def forward(self, x, x_mark):
-        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
-        # x = self.value_embedding(x) + self.position_embedding(x_mark[:, :, :self.d_mark]) + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark])
+        if self.use_exog_vars and self.exog_c_in > 0:
+            x = x + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
         return self.dropout(x)

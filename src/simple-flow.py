@@ -165,7 +165,8 @@ def main(
                 dropout=0,
                 factor=5,
                 d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
-                exog_c_in=1 # 1 temperature column (temp_media)
+                exog_c_in=1, # 1 temperature column (temp_media)
+                use_exog_vars = experiment_handler.use_exogenous()
             )
             trainer = Trainer(
                 model=model,
@@ -289,5 +290,5 @@ if __name__ == "__main__":
     main(
         train=True, 
         expiment_type=ExperimentType.COUNTRY,
-        experiments_count=5
+        experiments_count=None
     )
