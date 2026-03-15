@@ -119,9 +119,11 @@ class TemporalEmbedding(nn.Module):
         day_x = self.day_embed(x[:, :, 1])
         month_x = self.month_embed(x[:, :, 0])
 
-        x = hour_x + weekday_x + day_x + month_x + minute_x
-        if self.use_holidays:
-            x = x + self.holiday_embed(x[:, :, 5])
+        #x = hour_x + weekday_x + day_x + month_x + minute_x
+        #if self.use_holidays:
+        #    x = x + self.holiday_embed(x[:, :, 5])
+
+        x = weekday_x + self.holiday_embed(x[:, :, 5])
         return x
 
 
@@ -195,7 +197,7 @@ class DataEmbedding_with_exog(nn.Module):
         self.use_exog_vars = use_exog_vars
 
     def forward(self, x, x_mark):
-        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark])
+        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark]) + self.position_embedding(x)
         if self.use_exog_vars and self.exog_c_in > 0:
             x = x + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
         return self.dropout(x)
