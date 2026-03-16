@@ -197,82 +197,112 @@ class Trainer:
         verbose: bool = True,
         learning_rate: float = 0.001,
         train_epochs: int = 10,
-        rolling_step: int = 0
+        rolling_step: int = 0,
+        training_runs: int | None = None
     ):
-        time_now = time.time()
+        runs = 1 if training_runs is None else training_runs
+        best_overall_mape = float('inf')
+        best_overall_state = None
+        initial_state = {k: v.clone() for k, v in self.model.state_dict().items()}
 
-        train_steps = len(self.train_loader)
-        early_stopping = EarlyStopping(patience=patience, verbose=verbose)
+        for run in range(runs):
+            if runs > 1:
+                print(f"\n===== Training run {run + 1}/{runs} =====")
+                self.model.load_state_dict({k: v.clone() for k, v in initial_state.items()})
+                # Re-initialize weights for a fresh run
+                for module in self.model.modules():
+                    if hasattr(module, 'reset_parameters'):
+                        module.reset_parameters()
 
-        model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+            time_now = time.time()
 
-        criterion = nn.MSELoss().to(self.device)
+            train_steps = len(self.train_loader)
+            early_stopping = EarlyStopping(patience=patience, verbose=verbose)
 
-        use_rolling = rolling_step > 0
+            model_optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
-        for epoch in range(train_epochs):
-            iter_count = 0
-            train_loss = []
+            criterion = nn.MSELoss().to(self.device)
 
-            self.model.train()
-            epoch_time = time.time()
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.train_loader):
-                iter_count += 1
-                model_optim.zero_grad()
-                batch_x = batch_x.to(self.device) # [Batch_Size, Window, 1]
-                batch_y = batch_y.to(self.device) # [Batch_Size, Horizon, 1]
-                batch_x_mark = batch_x_mark.to(self.device) # [Batch_Size, Window, num_time_features]
-                batch_y_mark = batch_y_mark.to(self.device) # [Batch_Size, Horizon, num_time_features]
-                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+            use_rolling = rolling_step > 0
 
-                loss = criterion(outputs, batch_y)
-                train_loss.append(loss.item())
+            for epoch in range(train_epochs):
+                iter_count = 0
+                train_loss = []
 
-                if (i + 1) % 100 == 0:
-                    print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
-                    speed = (time.time() - time_now) / iter_count
-                    left_time = speed * ((train_epochs - epoch) * train_steps - i)
-                    print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
-                    iter_count = 0
-                    time_now = time.time()
-
-                loss.backward()
-                total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                if torch.isfinite(total_norm):
-                    model_optim.step()
-                else:
+                self.model.train()
+                epoch_time = time.time()
+                for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.train_loader):
+                    iter_count += 1
                     model_optim.zero_grad()
+                    batch_x = batch_x.to(self.device) # [Batch_Size, Window, 1]
+                    batch_y = batch_y.to(self.device) # [Batch_Size, Horizon, 1]
+                    batch_x_mark = batch_x_mark.to(self.device) # [Batch_Size, Window, num_time_features]
+                    batch_y_mark = batch_y_mark.to(self.device) # [Batch_Size, Horizon, num_time_features]
+                    outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
-            print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
-            train_loss = np.average(train_loss)
-            vali_loss, vali_mape = self.vali(self.val_loader, criterion)
+                    loss = criterion(outputs, batch_y)
+                    train_loss.append(loss.item())
 
-            if use_rolling:
-                vali_loss_rolling, vali_mape_rolling = self.vali(
-                    self.val_loader, criterion,
-                    rolling=True, rolling_step=rolling_step
-                )
-                print(
-                    "Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} "
-                    "Vali Loss (single-shot): {3:.7f} Vali MAPE: {4:.2f}% "
-                    "Vali Loss (rolling-{5}): {6:.7f} Vali MAPE (rolling): {7:.2f}%".format(
-                        epoch + 1, train_steps, train_loss, vali_loss, vali_mape,
-                        rolling_step, vali_loss_rolling, vali_mape_rolling
+                    if (i + 1) % 100 == 0:
+                        print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                        speed = (time.time() - time_now) / iter_count
+                        left_time = speed * ((train_epochs - epoch) * train_steps - i)
+                        print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
+                        iter_count = 0
+                        time_now = time.time()
+
+                    loss.backward()
+                    total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    if torch.isfinite(total_norm):
+                        model_optim.step()
+                    else:
+                        model_optim.zero_grad()
+
+                print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
+                train_loss = np.average(train_loss)
+                vali_loss, vali_mape = self.vali(self.val_loader, criterion)
+
+                if use_rolling:
+                    vali_loss_rolling, vali_mape_rolling = self.vali(
+                        self.val_loader, criterion,
+                        rolling=True, rolling_step=rolling_step
                     )
-                )
-            else:
-                print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Vali MAPE: {4:.2f}%".format(
-                    epoch + 1, train_steps, train_loss, vali_loss, vali_mape))
+                    print(
+                        "Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} "
+                        "Vali Loss (single-shot): {3:.7f} Vali MAPE: {4:.2f}% "
+                        "Vali Loss (rolling-{5}): {6:.7f} Vali MAPE (rolling): {7:.2f}%".format(
+                            epoch + 1, train_steps, train_loss, vali_loss, vali_mape,
+                            rolling_step, vali_loss_rolling, vali_mape_rolling
+                        )
+                    )
+                else:
+                    print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Vali MAPE: {4:.2f}%".format(
+                        epoch + 1, train_steps, train_loss, vali_loss, vali_mape))
 
-            early_stopping(vali_mape, self.model, checkpoint_path)
-            if early_stopping.early_stop:
-                print("Early stopping")
-                break
+                early_stopping(vali_mape, self.model, checkpoint_path)
+                if early_stopping.early_stop:
+                    print("Early stopping")
+                    break
 
-            adjust_learning_rate(model_optim, epoch + 1)
+                adjust_learning_rate(model_optim, epoch + 1)
 
-        best_model_path = checkpoint_path / 'checkpoint.pth'
-        self.model.load_state_dict(torch.load(best_model_path))
+            best_model_path = checkpoint_path / 'checkpoint.pth'
+            self.model.load_state_dict(torch.load(best_model_path))
+
+            # Evaluate final vali_mape for this run
+            _, run_mape = self.vali(self.val_loader, criterion)
+            if runs > 1:
+                print(f"Run {run + 1}/{runs} final Vali MAPE: {run_mape:.2f}%")
+
+            if run_mape < best_overall_mape:
+                best_overall_mape = run_mape
+                best_overall_state = {k: v.clone() for k, v in self.model.state_dict().items()}
+
+        if best_overall_state is not None:
+            self.model.load_state_dict(best_overall_state)
+            torch.save(best_overall_state, checkpoint_path / 'checkpoint.pth')
+            if runs > 1:
+                print(f"\nBest run Vali MAPE: {best_overall_mape:.2f}%")
 
     def _inverse_scale(
         self,
