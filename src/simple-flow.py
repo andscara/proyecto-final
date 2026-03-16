@@ -8,6 +8,7 @@ import random
 import torch
 
 from forecasting.autoformer.autoformer import Autoformer
+from forecasting.autoformer.baseline import LinearBaseline
 from forecasting.autoformer.prediction_window import PredictionWindow
 from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
@@ -150,24 +151,28 @@ def main(
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
         def create_model():
-            return Autoformer(
+            return LinearBaseline(
                 seq_len=seq_len,
-                label_len=LABEL_LEN,
-                pred_len=pred_len,
-                c_out=1,
-                enc_in=1,
-                dec_in=1,
-                d_model=128,
-                n_heads=2,
-                d_ff=256,
-                e_layers=2,
-                d_layers=1,
-                dropout=0,
-                factor=5,
-                d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
-                exog_c_in=1, # 1 temperature column (temp_media)
-                use_exog_vars = experiment_handler.use_exogenous()
+                pred_len=pred_len
             )
+            # return Autoformer(
+            #     seq_len=seq_len,
+            #     label_len=LABEL_LEN,
+            #     pred_len=pred_len,
+            #     c_out=1,
+            #     enc_in=1,
+            #     dec_in=1,
+            #     d_model=128,
+            #     n_heads=2,
+            #     d_ff=256,
+            #     e_layers=2,
+            #     d_layers=1,
+            #     dropout=0,
+            #     factor=5,
+            #     d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
+            #     exog_c_in=1, # 1 temperature column (temp_media)
+            #     use_exog_vars = experiment_handler.use_exogenous()
+            # )
         trainer = Trainer(
             model_factory=create_model,
             window_stride_in_days=1,
@@ -185,7 +190,7 @@ def main(
         checkpoint_path = Path("checkpoints") / experiment_group.name
         patience = 50
         lr = 0.00003 
-        train_epochs = 300
+        train_epochs = 3000
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
@@ -198,7 +203,7 @@ def main(
             print(f"Starting training for experiment group {experiment_group.name}...")
             trainer.train(
                 patience=patience,
-                verbose=True,
+                verbose=False,
                 learning_rate=lr,
                 train_epochs=train_epochs,
                 checkpoint_path=path,
@@ -276,6 +281,6 @@ def main(
 if __name__ == "__main__":
     main(
         train=True, 
-        expiment_type=ExperimentType.COUNTRY,
-        training_runs=3
+        expiment_type=ExperimentType.REGIONS,
+        training_runs=None
     )
