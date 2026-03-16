@@ -149,26 +149,27 @@ def main(
         print("Creating model and trainer...")
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
-        model = Autoformer(
-            seq_len=seq_len,
-            label_len=LABEL_LEN,
-            pred_len=pred_len,
-            c_out=1,
-            enc_in=1,
-            dec_in=1,
-            d_model=128,
-            n_heads=2,
-            d_ff=256,
-            e_layers=2,
-            d_layers=1,
-            dropout=0,
-            factor=5,
-            d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
-            exog_c_in=1, # 1 temperature column (temp_media)
-            use_exog_vars = experiment_handler.use_exogenous()
-        )
+        def create_model():
+            return Autoformer(
+                seq_len=seq_len,
+                label_len=LABEL_LEN,
+                pred_len=pred_len,
+                c_out=1,
+                enc_in=1,
+                dec_in=1,
+                d_model=128,
+                n_heads=2,
+                d_ff=256,
+                e_layers=2,
+                d_layers=1,
+                dropout=0,
+                factor=5,
+                d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
+                exog_c_in=1, # 1 temperature column (temp_media)
+                use_exog_vars = experiment_handler.use_exogenous()
+            )
         trainer = Trainer(
-            model=model,
+            model_factory=create_model,
             window_stride_in_days=1,
             all_dataset=experiment_group.full_dataset,
             train_loader=train_dataloader,
@@ -184,7 +185,7 @@ def main(
         checkpoint_path = Path("checkpoints") / experiment_group.name
         patience = 50
         lr = 0.00003 
-        train_epochs = 300
+        train_epochs = 10
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,

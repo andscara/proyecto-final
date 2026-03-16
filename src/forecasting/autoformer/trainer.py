@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import List
+from typing import Callable, List
 import torch
 import torch.nn as nn
 from torch.utils import data
@@ -18,7 +18,7 @@ from forecasting.autoformer.prediction_window import PredictionWindow
 class Trainer:
     def __init__(
         self,
-        model: nn.Module,
+        model_factory: Callable[[], nn.Module],
         window_stride_in_days: int,
         all_dataset: WindowsDataset,
         train_loader: data.DataLoader[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
@@ -30,7 +30,8 @@ class Trainer:
         output_attention: bool,
         device_name: str = 'cpu'
     ):
-        self.model = model
+        self.model_factory = model_factory
+        self.model = model_factory()
         self.window_stride_in_days = window_stride_in_days
         self.all_dataset = all_dataset
         self.train_loader = train_loader
@@ -203,16 +204,12 @@ class Trainer:
         runs = 1 if training_runs is None else training_runs
         best_overall_mape = float('inf')
         best_overall_state = None
-        initial_state = {k: v.clone() for k, v in self.model.state_dict().items()}
 
         for run in range(runs):
             if runs > 1:
                 print(f"\n===== Training run {run + 1}/{runs} =====")
-                self.model.load_state_dict({k: v.clone() for k, v in initial_state.items()})
-                # Re-initialize weights for a fresh run
-                for module in self.model.modules():
-                    if hasattr(module, 'reset_parameters'):
-                        module.reset_parameters()
+                self.model = self.model_factory()
+                self.model.to(self.device)
 
             time_now = time.time()
 
