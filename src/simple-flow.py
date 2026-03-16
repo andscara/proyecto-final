@@ -185,7 +185,7 @@ def main(
         checkpoint_path = Path("checkpoints") / experiment_group.name
         patience = 50
         lr = 0.00003 
-        train_epochs = 10
+        train_epochs = 300
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
