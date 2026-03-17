@@ -25,7 +25,7 @@ from forecasting.autoformer.experiment_configuration import ExperimentConfigurat
 
 load_dotenv()
 PATH = os.getenv("DATA_PATH")
-WINDOW_SIZE = 24*7 # 2 weeks
+WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 7 day
 BATCH_SIZE = 128
 LABEL_LEN = WINDOW_SIZE
