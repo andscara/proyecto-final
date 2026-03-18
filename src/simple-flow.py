@@ -9,6 +9,7 @@ import torch
 
 from forecasting.autoformer.autoformer import Autoformer
 from forecasting.autoformer.baseline import LinearBaseline
+from forecasting.autoformer.baseline2 import LinearBaseline2
 from forecasting.autoformer.prediction_window import PredictionWindow
 from forecasting.autoformer.trainer import Trainer
 from torch.utils import data
@@ -28,7 +29,7 @@ PATH = os.getenv("DATA_PATH")
 WINDOW_SIZE = 24*7*2 # 2 weeks
 HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 7 day
 BATCH_SIZE = 128
-LABEL_LEN = WINDOW_SIZE
+LABEL_LEN = 0
 
 # EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 EXOG_COLS = ['temp_media']
@@ -151,10 +152,14 @@ def main(
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
         def create_model():
-            return LinearBaseline(
+            return LinearBaseline2(
                 seq_len=seq_len,
                 pred_len=pred_len
             )
+            # return LinearBaseline(
+            #     seq_len=seq_len,
+            #     pred_len=pred_len
+            # )
             # return Autoformer(
             #     seq_len=seq_len,
             #     label_len=LABEL_LEN,
@@ -280,7 +285,7 @@ def main(
 
 if __name__ == "__main__":
     main(
-        train=True, 
-        expiment_type=ExperimentType.REGIONS,
+        train=False, 
+        expiment_type=ExperimentType.COUNTRY,
         training_runs=None
     )
