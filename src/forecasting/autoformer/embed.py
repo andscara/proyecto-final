@@ -187,8 +187,8 @@ class DataEmbedding_with_exog(nn.Module):
         self.exog_c_in = exog_c_in
         self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
-        self.exog_embedding = nn.Linear(in_features=exog_c_in, out_features=d_model, bias=False)
-        self.exog_scale = nn.Parameter(torch.tensor(5.0))
+        self.exog_embedding = TokenEmbedding(c_in=exog_c_in, d_model=d_model)
+        self.fusion = nn.Linear(d_model * 2, d_model)
         self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type,
                                                     freq=freq, use_holidays=use_exog_vars) if embed_type != 'timeF' else TimeFeatureEmbedding(
             d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
@@ -196,7 +196,11 @@ class DataEmbedding_with_exog(nn.Module):
         self.use_exog_vars = use_exog_vars
 
     def forward(self, x, x_mark):
-        x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark])
+        val = self.value_embedding(x)
+        temporal = self.temporal_embedding(x_mark[:, :, :self.d_mark])
         if self.use_exog_vars and self.exog_c_in > 0:
-            x = x + self.exog_scale * self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+            exog = self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+            x = self.fusion(torch.cat([val, exog], dim=-1)) + temporal
+        else:
+            x = val + temporal
         return self.dropout(x)
