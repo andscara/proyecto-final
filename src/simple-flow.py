@@ -1,56 +1,26 @@
 #type: ignore
 
-from tabnanny import check
+import argparse
 from matplotlib import pyplot as plt
 import os
 from matplotlib.backends.backend_pdf import PdfPages
 import random
 import torch
 
-from forecasting.autoformer.autoformer import Autoformer
-from forecasting.autoformer.baseline import LinearBaseline
-from forecasting.autoformer.baseline2 import LinearBaseline2
 from forecasting.autoformer.prediction_window import PredictionWindow
 from forecasting.autoformer.trainer import Trainer
+from forecasting.autoformer.flow_config import FlowConfig
 from torch.utils import data
 from pathlib import Path
 from dotenv import load_dotenv
-import os
-import horizon as h
-from enum import Enum
 import numpy as np
-from typing import List
-from forecasting.autoformer.experiment_handler import experiment_factory, BaseExperimentHandler, ExperimentType
-from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
-
 
 load_dotenv()
-PATH = os.getenv("DATA_PATH")
-WINDOW_SIZE = 24*7 # 2 weeks
-HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24) # 7 day
-BATCH_SIZE = 128
-LABEL_LEN = WINDOW_SIZE // 2
+from typing import List
+from forecasting.autoformer.experiment_handler import experiment_factory, BaseExperimentHandler
+from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
 
-# EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 EXOG_COLS = ['temp_media']
-# EXOG_COLS = ['temperature']
-
-class Region(Enum):
-    NORTH = ("NORTH", "LA MAGNOLIA", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
-    SOUTH = ("SOUTH", "LAS BRUJAS", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
-    EAST = ("EAST", "PASO DE LA LAGUNA", ["MALDONADO", "ROCHA", "TREINTA Y TRES", "LAVALLEJA"])
-    WEST = ("WEST", "GLENCOE", ["PAYSANDU","RIO NEGRO", "DURAZNO"])
-    MONTEVIDEO = ("MONTEVIDEO", "LAS BRUJAS", ["MONTEVIDEO"])
-
-    def __init__(
-            self, 
-            code: str, 
-            estacion: str,
-            departamentos: list[str]
-        ):
-        self.code = code
-        self.estacion = estacion
-        self.departamentos = departamentos
 
 
 def print_test_metrics(
@@ -79,11 +49,15 @@ def print_test_metrics(
     pdf.savefig()
     plt.close()
 
-def main(
-    train: bool,
-    expiment_type: ExperimentType,
-    training_runs: int | None
-):
+def main(cfg: FlowConfig):
+    train          = cfg.train
+    expiment_type  = cfg.experiment_type
+    training_runs  = cfg.training_runs
+    WINDOW_SIZE    = cfg.window_size
+    HORIZON        = cfg.horizon
+    BATCH_SIZE     = cfg.batch_size
+    LABEL_LEN      = cfg.label_len
+
     if training_runs is None:
         print("Setting seed for reproducibility...")
         # Fijar semillas para reproducibilidad
@@ -151,35 +125,11 @@ def main(
         print("Creating model and trainer...")
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
-        def create_model():
-            # return LinearBaseline(
-            #     seq_len=seq_len,
-            #     pred_len=pred_len,
-            #     exog_size= False, #len(EXOG_COLS) if experiment_handler.use_exogenous() else 0,
-            #     include_holiday=False
-            # )
-            return LinearBaseline2(
-                seq_len=seq_len,
-                pred_len=pred_len
-            )
-            # return Autoformer(
-            #     seq_len=seq_len,
-            #     label_len=LABEL_LEN,
-            #     pred_len=pred_len,
-            #     c_out=1,
-            #     enc_in=1,
-            #     dec_in=1,
-            #     d_model=128,
-            #     n_heads=2,
-            #     d_ff=256,
-            #     e_layers=2,
-            #     d_layers=1,
-            #     dropout=0,
-            #     factor=5,
-            #     d_mark=5, # 4 time features (month, day, weekday, hour) + 1 holiday col
-            #     exog_c_in=1, # 1 temperature column (temp_media)
-            #     use_exog_vars = experiment_handler.use_exogenous()
-            # )
+        create_model = cfg.make_model_factory(
+            seq_len=seq_len,
+            pred_len=pred_len,
+            use_exog=experiment_handler.use_exogenous(),
+        )
         trainer = Trainer(
             model_factory=create_model,
             window_stride_in_days=1,
@@ -195,9 +145,9 @@ def main(
         )
 
         checkpoint_path = Path("checkpoints") / experiment_group.name
-        patience = 50
-        lr = 0.00003
-        train_epochs = 300
+        patience = cfg.patience
+        lr = cfg.learning_rate
+        train_epochs = cfg.train_epochs
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
@@ -286,8 +236,7 @@ def main(
 
 
 if __name__ == "__main__":
-    main(
-        train=True, 
-        expiment_type=ExperimentType.COUNTRY,
-        training_runs=None
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", help="Path to TOML config file (e.g. configs/baseline_country.toml)")
+    args = parser.parse_args()
+    main(FlowConfig.from_toml(args.config))
