@@ -4,15 +4,15 @@ import torch.nn as nn
 
 class LinearBaseline2(nn.Module):
     """
-    Simple linear baseline: flattens the encoder input (seq_len,)
-    and projects it to (pred_len,) with a single linear layer.
+    Naive baseline: returns the last pred_len values of the encoder input,
+    plus a learnable bias per horizon step so the model can be trained.
     """
 
     def __init__(self, seq_len: int = 336, pred_len: int = 168):
         super().__init__()
         self.seq_len = seq_len
         self.pred_len = pred_len
-        self.linear = nn.Linear(seq_len, pred_len)
+        self._dummy = nn.Parameter(torch.zeros(1), requires_grad=False)
 
     def forward(
         self,

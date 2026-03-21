@@ -248,12 +248,13 @@ class Trainer:
                         iter_count = 0
                         time_now = time.time()
 
-                    loss.backward()
-                    total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                    if torch.isfinite(total_norm):
-                        model_optim.step()
-                    else:
-                        model_optim.zero_grad()
+                    if loss.requires_grad:
+                        loss.backward()
+                        total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                        if torch.isfinite(total_norm):
+                            model_optim.step()
+                        else:
+                            model_optim.zero_grad()
 
                 print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
                 train_loss = np.average(train_loss)

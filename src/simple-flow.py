@@ -26,10 +26,10 @@ from forecasting.autoformer.experiment_configuration import ExperimentConfigurat
 
 load_dotenv()
 PATH = os.getenv("DATA_PATH")
-WINDOW_SIZE = 24*7*2 # 2 weeks
-HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24*7) # 7 day
+WINDOW_SIZE = 24*7 # 2 weeks
+HORIZON = h.Horizon(type = h.HorizonType.HOUR, length=24) # 7 day
 BATCH_SIZE = 128
-LABEL_LEN = 0
+LABEL_LEN = WINDOW_SIZE // 2
 
 # EXOG_COLS = ['temp_max', 'temp_min', 'temp_media']
 EXOG_COLS = ['temp_media']
@@ -152,14 +152,16 @@ def main(
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
         def create_model():
+            # return LinearBaseline(
+            #     seq_len=seq_len,
+            #     pred_len=pred_len,
+            #     exog_size= False, #len(EXOG_COLS) if experiment_handler.use_exogenous() else 0,
+            #     include_holiday=False
+            # )
             return LinearBaseline2(
                 seq_len=seq_len,
                 pred_len=pred_len
             )
-            # return LinearBaseline(
-            #     seq_len=seq_len,
-            #     pred_len=pred_len
-            # )
             # return Autoformer(
             #     seq_len=seq_len,
             #     label_len=LABEL_LEN,
@@ -194,8 +196,8 @@ def main(
 
         checkpoint_path = Path("checkpoints") / experiment_group.name
         patience = 50
-        lr = 0.00003 
-        train_epochs = 3000
+        lr = 0.00003
+        train_epochs = 300
         setting = 'patience_{}_lr_{}_epochs_{}'.format(
             patience,
             lr,
@@ -285,7 +287,7 @@ def main(
 
 if __name__ == "__main__":
     main(
-        train=False, 
+        train=True, 
         expiment_type=ExperimentType.COUNTRY,
         training_runs=None
     )
