@@ -1,6 +1,7 @@
 #type: ignore
 import random
 from matplotlib.pyplot import sca
+from torch import threshold
 import torch.utils.data as data
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -197,8 +198,9 @@ def data_splitter(
     pred_len = exp_config.horizon.length
 
     # Divide the dataframe [start_train, end_train], [end_df_minus_1_year, end_df]
-    train_df = df[df['dia'] <  pd.Timestamp('2024-09-01')]
-    val_test_df = df[df['dia'] >= pd.Timestamp('2024-09-01')]
+    threshold_date = '2024-09-01'
+    train_df = df[df['dia'] <  pd.Timestamp(threshold_date)]
+    val_test_df = df[df['dia'] >= pd.Timestamp(threshold_date)]
 
     train_data_windows, train_time_features_windows, train_scaler = create_windows(
         df=train_df,

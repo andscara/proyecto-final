@@ -82,7 +82,7 @@ class EarlyStopping:
         path: Path
     ):
         if self.verbose:
-            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+            print(f'\033[92mValidation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...\033[0m')
         torch.save(model.state_dict(), path / 'checkpoint.pth')
         self.val_loss_min = val_loss
 

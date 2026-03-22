@@ -42,6 +42,10 @@ class BaseExperimentHandler(ABC):
         """
         ...
 
+    @abstractmethod
+    def use_exogenous(self) -> bool:
+        ...
+
 class Region(Enum):
     NORTH = ("NORTH", ["ARTIGAS", "SALTO", "RIVERA", "TACUAREMBO", "CERRO LARGO"])
     SOUTH = ("SOUTH", ["SAN JOSE", "COLONIA", "CANELONES", "FLORES", "FLORIDA", "SORIANO"])
@@ -95,6 +99,9 @@ class RegionsExperimentHandler(BaseExperimentHandler):
             test_dataset=test_dataset
         )
     
+    def use_exogenous(self) -> bool:
+        return True
+    
 class CountryExperimentHandler(BaseExperimentHandler):
 
     def __init__(self, db_path: str, data_path: str, exp_config: ExperimentConfiguration):
@@ -131,6 +138,9 @@ class CountryExperimentHandler(BaseExperimentHandler):
             val_dataset=val_dataset,
             test_dataset=test_dataset
         )
+    
+    def use_exogenous(self) -> bool:
+        return False
 
 class ExperimentType(Enum):
     REGIONS = "regions"

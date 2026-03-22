@@ -233,24 +233,25 @@ def train_and_predict_cluster(
 
     seq_len = WINDOW_SIZE
     pred_len = HORIZON.length
-    model = Autoformer(
-        seq_len=seq_len,
-        label_len=LABEL_LEN,
-        pred_len=pred_len,
-        c_out=1,
-        enc_in=1,
-        dec_in=1,
-        d_model=256,
-        n_heads=4,
-        d_ff=1024,
-        e_layers=3,
-        d_layers=2,
-        dropout=0,
-        factor=2,
-        d_mark=8
-    )
+    def create_model():
+        return Autoformer(
+            seq_len=seq_len,
+            label_len=LABEL_LEN,
+            pred_len=pred_len,
+            c_out=1,
+            enc_in=1,
+            dec_in=1,
+            d_model=256,
+            n_heads=4,
+            d_ff=1024,
+            e_layers=3,
+            d_layers=2,
+            dropout=0,
+            factor=2,
+            d_mark=8
+        )
     trainer = Trainer(
-        model=model,
+        model=create_model,
         window_stride_in_days=1,
         all_dataset=all_dataset,
         train_loader=train_dataloader,
