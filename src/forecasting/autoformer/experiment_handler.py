@@ -140,7 +140,7 @@ class CountryExperimentHandler(BaseExperimentHandler):
         )
     
     def use_exogenous(self) -> bool:
-        return False
+        return True
 
 class ExperimentType(Enum):
     REGIONS = "regions"

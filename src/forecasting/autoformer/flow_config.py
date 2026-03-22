@@ -93,6 +93,7 @@ class FlowConfig:
                     pred_len=pred_len,
                     exog_size=exog_size,
                     include_holiday=bool(p.get("include_holiday", True)),
+                    use_temp_bins=bool(p.get("use_temp_bins", False)),
                 )
 
         elif self.model_type == "linear_baseline2":
