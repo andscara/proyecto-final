@@ -2,13 +2,13 @@ train = true
 training_runs = 3   # train 3 times, keep best
 
 [experiment]
-type = "regions"
+type = "country"
 
 [data]
 window_size    = 336
 horizon_type   = "hour"
 horizon_length = 168
-label_len      = 0
+label_len      = 336
 batch_size     = 128
 
 [training]
@@ -26,4 +26,5 @@ d_layers  = 1
 dropout   = 0.0
 factor    = 5
 d_mark    = 5       # month, day, weekday, hour, is_holiday
-exog_c_in = 1       # temp_media
+exog_c_in = 4       # muy_frio, frio, calor, mucho_calor
+exog_cols       = ["muy_frio", "frio", "calor", "mucho_calor"]

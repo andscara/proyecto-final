@@ -1,32 +1,9 @@
 import torch
 import torch.nn as nn
 
+from forecasting.autoformer.embed import NUM_TEMP_BINS, temp_bins
 
 HOLIDAY_MARK_IDX = 4  # position of is_holiday in x_mark_enc (month, day, weekday, hour, is_holiday, ...)
-
-# Temperature thresholds in normalized scale: temp_norm = (celsius + 15) / 65
-# muy_frio : celsius < 5   → norm < 0.308
-# frio     : 5 ≤ celsius < 12  → 0.308 ≤ norm < 0.415
-# calor    : 28 ≤ celsius < 35 → 0.662 ≤ norm < 0.769
-# mucho_calor: celsius ≥ 35   → norm ≥ 0.769
-# normal (12–28°C): all four indicators = 0
-_TEMP_MUY_FRIO  = (5  + 15) / 65   # 0.308
-_TEMP_FRIO      = (12 + 15) / 65   # 0.415
-_TEMP_CALOR     = (28 + 15) / 65   # 0.662
-_TEMP_MUCHO_CALOR = (35 + 15) / 65 # 0.769
-NUM_TEMP_BINS = 4
-
-
-def temp_bins(t: torch.Tensor) -> torch.Tensor:
-    """
-    t: (B, T) normalized temperature values
-    returns: (B, T, 4) binary indicators [muy_frio, frio, calor, mucho_calor]
-    """
-    muy_frio    = (t < _TEMP_MUY_FRIO).float()
-    frio        = ((t >= _TEMP_MUY_FRIO) & (t < _TEMP_FRIO)).float()
-    calor       = ((t >= _TEMP_CALOR) & (t < _TEMP_MUCHO_CALOR)).float()
-    mucho_calor = (t >= _TEMP_MUCHO_CALOR).float()
-    return torch.stack([muy_frio, frio, calor, mucho_calor], dim=-1)  # (B, T, 4)
 
 
 class LinearBaseline(nn.Module):

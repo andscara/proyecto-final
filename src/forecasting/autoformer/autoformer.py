@@ -33,7 +33,7 @@ class Autoformer(nn.Module):
             c_out: int = 7,
             d_mark: int | None = None,
             exog_c_in: int = 0,
-            use_exog_vars: bool = True
+            use_exog_vars: bool = True,
     ):
         """
         Autoformer constructor

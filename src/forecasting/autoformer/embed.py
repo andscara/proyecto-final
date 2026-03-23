@@ -4,6 +4,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+# Temperature thresholds in normalized scale: temp_norm = (celsius + 15) / 65
+# muy_frio    : celsius < 5            → norm < 0.308
+# frio        : 5  ≤ celsius < 12      → 0.308 ≤ norm < 0.415
+# calor       : 28 ≤ celsius < 35      → 0.662 ≤ norm < 0.769
+# mucho_calor : celsius ≥ 35           → norm ≥ 0.769
+# normal (12–28 °C): all four = 0
+_TEMP_MUY_FRIO    = (5  + 15) / 65   # 0.308
+_TEMP_FRIO        = (12 + 15) / 65   # 0.415
+_TEMP_CALOR       = (28 + 15) / 65   # 0.662
+_TEMP_MUCHO_CALOR = (35 + 15) / 65   # 0.769
+NUM_TEMP_BINS = 4
+
+
+def temp_bins(t: torch.Tensor) -> torch.Tensor:
+    """
+    t: (B, T) normalized temperature values.
+    Returns (B, T, 4) float binary indicators: [muy_frio, frio, calor, mucho_calor].
+    """
+    muy_frio    = (t < _TEMP_MUY_FRIO).float()
+    frio        = ((t >= _TEMP_MUY_FRIO) & (t < _TEMP_FRIO)).float()
+    calor       = ((t >= _TEMP_CALOR)    & (t < _TEMP_MUCHO_CALOR)).float()
+    mucho_calor = (t >= _TEMP_MUCHO_CALOR).float()
+    return torch.stack([muy_frio, frio, calor, mucho_calor], dim=-1)  # (B, T, 4)
+
 def compared_version(ver1, ver2):
     """
     :param ver1
@@ -172,19 +196,20 @@ class DataEmbedding_wo_pos(nn.Module):
     
 class DataEmbedding_with_exog(nn.Module):
     def __init__(
-            self, 
+            self,
             c_in,
-            d_model, 
-            embed_type='fixed', 
-            freq='h', 
-            dropout=0.1, 
-            d_mark: int | None = None, 
+            d_model,
+            embed_type='fixed',
+            freq='h',
+            dropout=0.1,
+            d_mark: int | None = None,
             exog_c_in: int = 0,
-            use_exog_vars: bool = True
+            use_exog_vars: bool = True,
         ):
         super(DataEmbedding_with_exog, self).__init__()
         self.d_mark = d_mark
         self.exog_c_in = exog_c_in
+        self.use_exog_vars = use_exog_vars
         self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
         self.exog_embedding = nn.Linear(in_features=exog_c_in, out_features=d_model, bias=False)
@@ -192,7 +217,6 @@ class DataEmbedding_with_exog(nn.Module):
                                                     freq=freq, use_holidays=use_exog_vars) if embed_type != 'timeF' else TimeFeatureEmbedding(
             d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
         self.dropout = nn.Dropout(p=dropout)
-        self.use_exog_vars = use_exog_vars
 
     def forward(self, x, x_mark):
         x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark])
