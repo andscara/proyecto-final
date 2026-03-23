@@ -31,38 +31,64 @@ def temp_bins(t: torch.Tensor) -> torch.Tensor:
 
 class TempEncoder(nn.Module):
     """
-    Learnable soft temperature bins.  Uses sigmoid step-functions at
-    learnable thresholds (initialized at the original hand-crafted values)
-    so the model starts from the known-good solution and can refine it.
+    Learnable soft temperature bins with optional temporal context.
 
-    Each output feature is  σ(sharpness_i · (temp − threshold_i)),
-    producing a smooth 0→1 transition around threshold_i.
-    The downstream linear layer can combine steps to form range indicators,
-    e.g.  step(t, 0.31) − step(t, 0.42)  ≈  frio indicator.
+    Uses sigmoid step-functions at learnable thresholds (initialized at the
+    original hand-crafted values).  When use_context=True the thresholds are
+    shifted by a learned function of month, day of month, and hour:
+
+        θ_i(month, day, hour) = θ_i_base  +  W_i · [month_norm, day_norm, hour_norm]
+
+    This lets the model learn, e.g., that at night the "cold" threshold is
+    lower (people are asleep, less temperature-driven demand), that in
+    summer the "hot" threshold shifts, or that at the end of the month
+    people use less heating/cooling.  Weights are initialised at **zero**
+    so the model starts from the exact same solution as the fixed bins.
     """
 
-    def __init__(self, n_bins: int = NUM_TEMP_BINS):
+    def __init__(self, n_bins: int = NUM_TEMP_BINS, use_context: bool = False):
         super().__init__()
         self.n_bins = n_bins
+        self.use_context = use_context
         # Initialize thresholds at the original hand-crafted boundaries
         init_thresholds = torch.tensor(
             [_TEMP_MUY_FRIO, _TEMP_FRIO, _TEMP_CALOR, _TEMP_MUCHO_CALOR]
         )
-        if n_bins != NUM_TEMP_BINS:
+        if n_bins != len(init_thresholds):
             init_thresholds = torch.linspace(
                 _TEMP_MUY_FRIO, _TEMP_MUCHO_CALOR, n_bins
             )
         self.thresholds = nn.Parameter(init_thresholds)
         # Sharpness controls transition steepness (higher → closer to hard bins)
         self.log_sharpness = nn.Parameter(torch.full((n_bins,), math.log(20.0)))
+        if use_context:
+            # [month_norm, day_norm, hour_norm] → per-bin threshold offset
+            self.context_proj = nn.Linear(3, n_bins, bias=False)
+            nn.init.zeros_(self.context_proj.weight)
 
-    def forward(self, t: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        t: torch.Tensor,
+        month: torch.Tensor | None = None,
+        day: torch.Tensor | None = None,
+        hour: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """
-        t: (B, T) normalized temperature values.
+        t:     (B, T)  normalized temperature values.
+        month: (B, T)  raw month 1-12 (optional, required if use_context).
+        day:   (B, T)  raw day 1-31   (optional, required if use_context).
+        hour:  (B, T)  raw hour 0-23  (optional, required if use_context).
         Returns (B, T, n_bins) soft step features.
         """
+        thresholds = self.thresholds                                # (n_bins,)
+        if self.use_context and month is not None and day is not None and hour is not None:
+            month_norm = (month - 1.0) / 11.0 - 0.5                # → [-0.5, 0.5]
+            day_norm   = (day - 1.0) / 30.0 - 0.5                  # → [-0.5, 0.5]
+            hour_norm  = hour / 23.0 - 0.5                         # → [-0.5, 0.5]
+            ctx = torch.stack([month_norm, day_norm, hour_norm], dim=-1)  # (B, T, 3)
+            thresholds = thresholds + self.context_proj(ctx)        # (B, T, n_bins)
         sharpness = self.log_sharpness.exp()
-        return torch.sigmoid(sharpness * (t.unsqueeze(-1) - self.thresholds))
+        return torch.sigmoid(sharpness * (t.unsqueeze(-1) - thresholds))
 
 def compared_version(ver1, ver2):
     """
