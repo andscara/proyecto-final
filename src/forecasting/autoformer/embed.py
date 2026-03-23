@@ -35,14 +35,15 @@ class TempEncoder(nn.Module):
 
     Uses sigmoid step-functions at learnable thresholds (initialized at the
     original hand-crafted values).  When use_context=True the thresholds are
-    shifted by a learned function of month, day of month, and hour:
+    shifted by a learned function of month, day of month, hour, and holidays:
 
-        θ_i(month, day, hour) = θ_i_base  +  W_i · [month_norm, day_norm, hour_norm]
+        θ_i(month, day, hour, holiday) = θ_i_base  +  W_i · [month_norm, day_norm, hour_norm, is_holiday]
 
     This lets the model learn, e.g., that at night the "cold" threshold is
     lower (people are asleep, less temperature-driven demand), that in
-    summer the "hot" threshold shifts, or that at the end of the month
-    people use less heating/cooling.  Weights are initialised at **zero**
+    summer the "hot" threshold shifts, that at the end of the month
+    people use less heating/cooling, or that on holidays people react
+    differently to temperature.  Weights are initialised at **zero**
     so the model starts from the exact same solution as the fixed bins.
     """
 
@@ -62,8 +63,8 @@ class TempEncoder(nn.Module):
         # Sharpness controls transition steepness (higher → closer to hard bins)
         self.log_sharpness = nn.Parameter(torch.full((n_bins,), math.log(20.0)))
         if use_context:
-            # [month_norm, day_norm, hour_norm] → per-bin threshold offset
-            self.context_proj = nn.Linear(3, n_bins, bias=False)
+            # [month_norm, day_norm, hour_norm, is_holiday] → per-bin threshold offset
+            self.context_proj = nn.Linear(4, n_bins, bias=False)
             nn.init.zeros_(self.context_proj.weight)
 
     def forward(
@@ -72,20 +73,22 @@ class TempEncoder(nn.Module):
         month: torch.Tensor | None = None,
         day: torch.Tensor | None = None,
         hour: torch.Tensor | None = None,
+        is_holiday: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
-        t:     (B, T)  normalized temperature values.
-        month: (B, T)  raw month 1-12 (optional, required if use_context).
-        day:   (B, T)  raw day 1-31   (optional, required if use_context).
-        hour:  (B, T)  raw hour 0-23  (optional, required if use_context).
+        t:          (B, T)  normalized temperature values.
+        month:      (B, T)  raw month 1-12 (optional, required if use_context).
+        day:        (B, T)  raw day 1-31   (optional, required if use_context).
+        hour:       (B, T)  raw hour 0-23  (optional, required if use_context).
+        is_holiday: (B, T)  binary 0/1     (optional, required if use_context).
         Returns (B, T, n_bins) soft step features.
         """
         thresholds = self.thresholds                                # (n_bins,)
-        if self.use_context and month is not None and day is not None and hour is not None:
+        if self.use_context and month is not None and day is not None and hour is not None and is_holiday is not None:
             month_norm = (month - 1.0) / 11.0 - 0.5                # → [-0.5, 0.5]
             day_norm   = (day - 1.0) / 30.0 - 0.5                  # → [-0.5, 0.5]
             hour_norm  = hour / 23.0 - 0.5                         # → [-0.5, 0.5]
-            ctx = torch.stack([month_norm, day_norm, hour_norm], dim=-1)  # (B, T, 3)
+            ctx = torch.stack([month_norm, day_norm, hour_norm, is_holiday], dim=-1)  # (B, T, 4)
             thresholds = thresholds + self.context_proj(ctx)        # (B, T, n_bins)
         sharpness = self.log_sharpness.exp()
         return torch.sigmoid(sharpness * (t.unsqueeze(-1) - thresholds))

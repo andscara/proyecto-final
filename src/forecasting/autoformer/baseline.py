@@ -70,14 +70,16 @@ class LinearBaseline(nn.Module):
             future_exog = x_mark_dec[:, -self.pred_len:, -self.exog_size:]         # (B, pred_len, exog_size)
             inp = torch.cat([inp, past_exog.flatten(1), future_exog.flatten(1)], dim=-1)
             if self.use_temp_bins:
-                past_month  = x_mark_enc[:, :, MONTH_IDX]
-                past_day    = x_mark_enc[:, :, DAY_IDX]
-                past_hour   = x_mark_enc[:, :, HOUR_IDX]
-                fut_month   = x_mark_dec[:, -self.pred_len:, MONTH_IDX]
-                fut_day     = x_mark_dec[:, -self.pred_len:, DAY_IDX]
-                fut_hour    = x_mark_dec[:, -self.pred_len:, HOUR_IDX]
-                past_bins   = self.temp_encoder(past_exog[:, :, 0], past_month, past_day, past_hour).flatten(1)
-                future_bins = self.temp_encoder(future_exog[:, :, 0], fut_month, fut_day, fut_hour).flatten(1)
+                past_month   = x_mark_enc[:, :, MONTH_IDX]
+                past_day     = x_mark_enc[:, :, DAY_IDX]
+                past_hour    = x_mark_enc[:, :, HOUR_IDX]
+                past_holiday = x_mark_enc[:, :, HOLIDAY_MARK_IDX]
+                fut_month    = x_mark_dec[:, -self.pred_len:, MONTH_IDX]
+                fut_day      = x_mark_dec[:, -self.pred_len:, DAY_IDX]
+                fut_hour     = x_mark_dec[:, -self.pred_len:, HOUR_IDX]
+                fut_holiday  = x_mark_dec[:, -self.pred_len:, HOLIDAY_MARK_IDX]
+                past_bins    = self.temp_encoder(past_exog[:, :, 0], past_month, past_day, past_hour, past_holiday).flatten(1)
+                future_bins  = self.temp_encoder(future_exog[:, :, 0], fut_month, fut_day, fut_hour, fut_holiday).flatten(1)
                 inp = torch.cat([inp, past_bins, future_bins], dim=-1)
         out = self.linear(inp)  # (B, pred_len)
         return out.unsqueeze(-1)  # (B, pred_len, 1)
