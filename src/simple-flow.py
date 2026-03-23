@@ -9,6 +9,7 @@ import torch
 
 from forecasting.autoformer.prediction_window import PredictionWindow
 from forecasting.autoformer.trainer import Trainer
+from forecasting.autoformer.sarimax_runner import SARIMAXRunner
 from forecasting.autoformer.flow_config import FlowConfig
 from torch.utils import data
 from pathlib import Path
@@ -90,7 +91,11 @@ def main(cfg: FlowConfig):
                 target_col_name="agg_valor",
                 scale=True,
                 exog_cols=EXOG_COLS
-            )
+            ),
+            clustering_path=os.getenv("CLUSTERING_PATH"),
+            clustering_results_path=cfg.clustering_results_path,
+            run_clustering=cfg.run_clustering,
+            n_clusters_per_region=cfg.n_clusters_per_region,
         )
 
     y_preds_flat_results = []
@@ -122,92 +127,121 @@ def main(cfg: FlowConfig):
             generator=generator
         )
         
-        print("Creating model and trainer...")
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
-        create_model = cfg.make_model_factory(
-            seq_len=seq_len,
-            pred_len=pred_len,
-            use_exog=experiment_handler.use_exogenous(),
-        )
-        trainer = Trainer(
-            model_factory=create_model,
-            window_stride_in_days=1,
-            all_dataset=experiment_group.full_dataset,
-            train_loader=train_dataloader,
-            val_loader=val_dataloader,
-            test_loader=test_dataloader,
-            seq_len=seq_len,
-            label_len=LABEL_LEN,
-            pred_len=pred_len,
-            output_attention=False,
-            device_name=os.getenv("DEVICE_NAME") #mps for mac and cuda for gpu
-        )
-
-        checkpoint_path = Path("checkpoints") / experiment_group.name
-        patience = cfg.patience
-        lr = cfg.learning_rate
-        train_epochs = cfg.train_epochs
-        setting = 'patience_{}_lr_{}_epochs_{}'.format(
-            patience,
-            lr,
-            train_epochs
-        )
-        path = checkpoint_path / setting
-        if not os.path.exists(path):
-            os.makedirs(path)
-        if train:
-            print(f"Starting training for experiment group {experiment_group.name}...")
-            trainer.train(
-                patience=patience,
-                verbose=False,
-                learning_rate=lr,
-                train_epochs=train_epochs,
-                checkpoint_path=path,
-                training_runs=training_runs
-            )
-            print("Training finished.")
-        print("Starting testing...")
-        plots_path = Path('results') / path / f'graficas.pdf'
+        plots_path = Path('results') / expiment_type.value / experiment_group.name / 'graficas.pdf'
         plots_path.parent.mkdir(parents=True, exist_ok=True)
-        with PdfPages(plots_path) as pdf:
-            trainer.predict_series(
-                pdf=pdf,
-                checkpoint_path=path,
-                rolling_step=0,
-                load= not train
+
+        if cfg.is_sarima:
+            print(f"Running SARIMAX for {experiment_group.name}...")
+            runner = SARIMAXRunner(
+                df=experiment_group.raw_df,
+                seq_len=seq_len,
+                pred_len=pred_len,
+                stride=24,
+                target_col="agg_valor",
+                exog_cols=EXOG_COLS if experiment_handler.use_exogenous() else None,
             )
-            y_preds_flat, y_reals_flat = trainer.predict_series(
-                pdf=pdf,
-                checkpoint_path=path,
-                rolling_step=24 * 1,
-                load= not train
+            with PdfPages(plots_path) as pdf:
+                y_preds_flat, y_reals_flat = runner.predict_series(pdf=pdf)
+                y_preds_flat_results.append(y_preds_flat)
+                y_reals_flat_results.append(y_reals_flat)
+                region_prediction_windows: List[PredictionWindow] = runner.predict_windows()
+                if len(global_prediction_windows) == 0:
+                    global_prediction_windows = region_prediction_windows
+                else:
+                    global_prediction_windows = [
+                        pw_global.aggregate(pw_region)
+                        for pw_global, pw_region in zip(global_prediction_windows, region_prediction_windows)
+                    ]
+                Trainer.plot_prediction_windows(
+                    pdf=pdf,
+                    prediction_windows=region_prediction_windows,
+                    rolling_step=0,
+                )
+                print_test_metrics(
+                    predictions=region_prediction_windows,
+                    prefix=f"{expiment_type.value} - {experiment_group.name}",
+                    pdf=pdf,
+                )
+        else:
+            print("Creating model and trainer...")
+            create_model = cfg.make_model_factory(
+                seq_len=seq_len,
+                pred_len=pred_len,
+                use_exog=experiment_handler.use_exogenous(),
             )
-            y_preds_flat_results.append(y_preds_flat)
-            y_reals_flat_results.append(y_reals_flat)
-            region_prediction_windows: List[PredictionWindow] = trainer.predict_windows(
-                checkpoint_path=path,
-                rolling_step=0,
-                load= not train
+            trainer = Trainer(
+                model_factory=create_model,
+                window_stride_in_days=1,
+                all_dataset=experiment_group.full_dataset,
+                train_loader=train_dataloader,
+                val_loader=val_dataloader,
+                test_loader=test_dataloader,
+                seq_len=seq_len,
+                label_len=LABEL_LEN,
+                pred_len=pred_len,
+                output_attention=False,
+                device_name=os.getenv("DEVICE_NAME") #mps for mac and cuda for gpu
             )
-            # We need to agregate each item in the existing global_prediction_windows with the corresponding item in the region_prediction_windows
-            if len(global_prediction_windows) == 0:
-                global_prediction_windows = region_prediction_windows
-            else:
-                global_prediction_windows = [
-                    pw_global.aggregate(pw_region)
-                    for pw_global, pw_region in zip(global_prediction_windows, region_prediction_windows)
-                ]
-            Trainer.plot_prediction_windows(
-                pdf=pdf,
-                prediction_windows=region_prediction_windows,
-                rolling_step=0
-            )
-            print_test_metrics(
-                predictions=region_prediction_windows,
-                prefix=f"{expiment_type.value} - {experiment_group.name}",
-                pdf=pdf
-            )
+
+            checkpoint_path = Path("checkpoints") / experiment_group.name
+            patience = cfg.patience
+            lr = cfg.learning_rate
+            train_epochs = cfg.train_epochs
+            setting = 'patience_{}_lr_{}_epochs_{}'.format(patience, lr, train_epochs)
+            path = checkpoint_path / setting
+            if not os.path.exists(path):
+                os.makedirs(path)
+            if train:
+                print(f"Starting training for experiment group {experiment_group.name}...")
+                trainer.train(
+                    patience=patience,
+                    verbose=False,
+                    learning_rate=lr,
+                    train_epochs=train_epochs,
+                    checkpoint_path=path,
+                    training_runs=training_runs
+                )
+                print("Training finished.")
+            print("Starting testing...")
+            with PdfPages(plots_path) as pdf:
+                trainer.predict_series(
+                    pdf=pdf,
+                    checkpoint_path=path,
+                    rolling_step=0,
+                    load=not train
+                )
+                y_preds_flat, y_reals_flat = trainer.predict_series(
+                    pdf=pdf,
+                    checkpoint_path=path,
+                    rolling_step=24 * 1,
+                    load=not train
+                )
+                y_preds_flat_results.append(y_preds_flat)
+                y_reals_flat_results.append(y_reals_flat)
+                region_prediction_windows: List[PredictionWindow] = trainer.predict_windows(
+                    checkpoint_path=path,
+                    rolling_step=0,
+                    load=not train
+                )
+                if len(global_prediction_windows) == 0:
+                    global_prediction_windows = region_prediction_windows
+                else:
+                    global_prediction_windows = [
+                        pw_global.aggregate(pw_region)
+                        for pw_global, pw_region in zip(global_prediction_windows, region_prediction_windows)
+                    ]
+                Trainer.plot_prediction_windows(
+                    pdf=pdf,
+                    prediction_windows=region_prediction_windows,
+                    rolling_step=0
+                )
+                print_test_metrics(
+                    predictions=region_prediction_windows,
+                    prefix=f"{expiment_type.value} - {experiment_group.name}",
+                    pdf=pdf
+                )
     plots_path = Path('results') / expiment_type.value / f'graficas.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
     # need to sum all the y_preds_flat_results and y_reals_flat_results element-wise before flattening, since we want to compare the sum of the predictions of all regions with the sum of the real values of all regions
