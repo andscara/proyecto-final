@@ -20,7 +20,7 @@ from typing import List
 from forecasting.autoformer.experiment_handler import experiment_factory, BaseExperimentHandler
 from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
 
-EXOG_COLS = ["muy_frio", "frio", "calor", "mucho_calor"]
+EXOG_COLS = ["temp_media"]
 
 
 def print_test_metrics(

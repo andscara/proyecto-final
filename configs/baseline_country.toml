@@ -19,4 +19,5 @@ train_epochs   = 3000
 [model]
 type            = "linear_baseline"
 include_holiday = true
-exog_cols       = ["muy_frio", "frio", "calor", "mucho_calor"]
+exog_cols       = ["temp_media"]
+use_temp_bins = true

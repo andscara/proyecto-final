@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from forecasting.autoformer.embed import NUM_TEMP_BINS, temp_bins
+from forecasting.autoformer.embed import NUM_TEMP_BINS, TempEncoder
 
 HOLIDAY_MARK_IDX = 4  # position of is_holiday in x_mark_enc (month, day, weekday, hour, is_holiday, ...)
 
@@ -17,9 +17,9 @@ class LinearBaseline(nn.Module):
         The model thus knows which days in the prediction horizon are holidays.
     exog_size: number of columns taken from the END of x_mark_enc/dec (e.g. temp_media).
         Past (seq_len) and future (pred_len) exog are both included linearly.
-    temp_bins: if True, assumes the first (or only) exog column is temp_media and appends
-        4 binary indicators (muy_frio, frio, calor, mucho_calor) per timestep,
-        allowing the linear model to capture the V-shaped temperature response.
+    temp_bins: if True, assumes the first (or only) exog column is temp_media and uses
+        learnable soft sigmoid steps (initialized at the original thresholds) to
+        produce temperature features, allowing the model to refine the ranges via backprop.
     """
 
     def __init__(
@@ -40,6 +40,9 @@ class LinearBaseline(nn.Module):
         holiday_size = (seq_len + pred_len) if include_holiday else 0
         bins_size = (seq_len + pred_len) * NUM_TEMP_BINS if self.use_temp_bins else 0
         exog_flat_size = (seq_len + pred_len) * exog_size
+
+        if self.use_temp_bins:
+            self.temp_encoder = TempEncoder(n_bins=NUM_TEMP_BINS)
 
         total_input = seq_len + holiday_size + exog_flat_size + bins_size
         print(f"[LinearBaseline] use_temp_bins={self.use_temp_bins}, exog_size={exog_size}, input_size={total_input}")
@@ -62,8 +65,8 @@ class LinearBaseline(nn.Module):
             future_exog = x_mark_dec[:, -self.pred_len:, -self.exog_size:]         # (B, pred_len, exog_size)
             inp = torch.cat([inp, past_exog.flatten(1), future_exog.flatten(1)], dim=-1)
             if self.use_temp_bins:
-                past_bins = temp_bins(past_exog[:, :, 0]).flatten(1)               # (B, seq_len * 4)
-                future_bins = temp_bins(future_exog[:, :, 0]).flatten(1)           # (B, pred_len * 4)
+                past_bins = self.temp_encoder(past_exog[:, :, 0]).flatten(1)       # (B, seq_len * n_bins)
+                future_bins = self.temp_encoder(future_exog[:, :, 0]).flatten(1)   # (B, pred_len * n_bins)
                 inp = torch.cat([inp, past_bins, future_bins], dim=-1)
         out = self.linear(inp)  # (B, pred_len)
         return out.unsqueeze(-1)  # (B, pred_len, 1)

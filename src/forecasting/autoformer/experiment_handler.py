@@ -119,10 +119,7 @@ class CountryExperimentHandler(BaseExperimentHandler):
             e.dia,
             e.hora,
             SUM(e.valor) as agg_valor,
-            CASE WHEN AVG(t.temperatura) < 5                                    THEN 1.0 ELSE 0.0 END as muy_frio,
-            CASE WHEN AVG(t.temperatura) >= 5  AND AVG(t.temperatura) < 12     THEN 1.0 ELSE 0.0 END as frio,
-            CASE WHEN AVG(t.temperatura) >= 28 AND AVG(t.temperatura) < 35     THEN 1.0 ELSE 0.0 END as calor,
-            CASE WHEN AVG(t.temperatura) >= 35                                  THEN 1.0 ELSE 0.0 END as mucho_calor
+            AVG((t.temperatura + 15) / 65) as temp_media
         from read_parquet('{self._data_path}') e
         inner join temp_departamento t on e.dia=t.dia and e.hora=t.hora and t.departamento = e.departamento
         group by e.dia, e.hora

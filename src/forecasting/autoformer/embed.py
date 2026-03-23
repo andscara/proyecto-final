@@ -28,6 +28,42 @@ def temp_bins(t: torch.Tensor) -> torch.Tensor:
     mucho_calor = (t >= _TEMP_MUCHO_CALOR).float()
     return torch.stack([muy_frio, frio, calor, mucho_calor], dim=-1)  # (B, T, 4)
 
+
+class TempEncoder(nn.Module):
+    """
+    Learnable soft temperature bins.  Uses sigmoid step-functions at
+    learnable thresholds (initialized at the original hand-crafted values)
+    so the model starts from the known-good solution and can refine it.
+
+    Each output feature is  σ(sharpness_i · (temp − threshold_i)),
+    producing a smooth 0→1 transition around threshold_i.
+    The downstream linear layer can combine steps to form range indicators,
+    e.g.  step(t, 0.31) − step(t, 0.42)  ≈  frio indicator.
+    """
+
+    def __init__(self, n_bins: int = NUM_TEMP_BINS):
+        super().__init__()
+        self.n_bins = n_bins
+        # Initialize thresholds at the original hand-crafted boundaries
+        init_thresholds = torch.tensor(
+            [_TEMP_MUY_FRIO, _TEMP_FRIO, _TEMP_CALOR, _TEMP_MUCHO_CALOR]
+        )
+        if n_bins != NUM_TEMP_BINS:
+            init_thresholds = torch.linspace(
+                _TEMP_MUY_FRIO, _TEMP_MUCHO_CALOR, n_bins
+            )
+        self.thresholds = nn.Parameter(init_thresholds)
+        # Sharpness controls transition steepness (higher → closer to hard bins)
+        self.log_sharpness = nn.Parameter(torch.full((n_bins,), math.log(20.0)))
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        """
+        t: (B, T) normalized temperature values.
+        Returns (B, T, n_bins) soft step features.
+        """
+        sharpness = self.log_sharpness.exp()
+        return torch.sigmoid(sharpness * (t.unsqueeze(-1) - self.thresholds))
+
 def compared_version(ver1, ver2):
     """
     :param ver1
