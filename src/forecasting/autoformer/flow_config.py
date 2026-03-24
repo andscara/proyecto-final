@@ -8,8 +8,8 @@ import horizon as h
 
 from forecasting.autoformer.experiment_handler import ExperimentType
 from forecasting.autoformer.autoformer import Autoformer
-from forecasting.autoformer.baseline import LinearBaseline
-from forecasting.autoformer.baseline2 import LinearBaseline2
+from forecasting.autoformer.linear import Linear
+from forecasting.autoformer.baseline import Baseline
 
 
 @dataclass
@@ -103,11 +103,11 @@ class FlowConfig:
         p = self.model_params
         label_len = self.label_len
 
-        if self.model_type == "linear_baseline":
+        if self.model_type == "linear":
             exog_size = len(p.get("exog_cols", ["temp_media"])) if use_exog else 0
 
             def factory() -> nn.Module:
-                return LinearBaseline(
+                return Linear(
                     seq_len=seq_len,
                     pred_len=pred_len,
                     exog_size=exog_size,
@@ -115,9 +115,9 @@ class FlowConfig:
                     use_temp_bins=bool(p.get("use_temp_bins", False)),
                 )
 
-        elif self.model_type == "linear_baseline2":
+        elif self.model_type == "baseline":
             def factory() -> nn.Module:
-                return LinearBaseline2(seq_len=seq_len, pred_len=pred_len)
+                return Baseline(seq_len=seq_len, pred_len=pred_len)
 
         elif self.model_type == "autoformer":
             def factory() -> nn.Module:

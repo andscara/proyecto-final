@@ -1,0 +1,85 @@
+import torch
+import torch.nn as nn
+
+from forecasting.autoformer.embed import NUM_TEMP_BINS, TempEncoder
+
+HOLIDAY_MARK_IDX = 4  # position of is_holiday in x_mark_enc (month, day, weekday, hour, is_holiday, ...)
+MONTH_IDX = 0
+DAY_IDX   = 1
+HOUR_IDX  = 3
+
+
+class Linear(nn.Module):
+    """
+    Simple linear baseline: flattens the encoder input (seq_len,)
+    and projects it to (pred_len,) with a single linear layer.
+
+    include_holiday: if True, includes:
+        - past is_holiday from x_mark_enc (index 4), shape (seq_len,)
+        - future is_holiday from x_mark_dec (index 4), shape (pred_len,)
+        The model thus knows which days in the prediction horizon are holidays.
+    exog_size: number of columns taken from the END of x_mark_enc/dec (e.g. temp_media).
+        Past (seq_len) and future (pred_len) exog are both included linearly.
+    temp_bins: if True, assumes the first (or only) exog column is temp_media and uses
+        learnable soft sigmoid steps (initialized at the original thresholds) to
+        produce temperature features.  The thresholds are also conditioned on
+        month, day of month, and hour so the model can learn time-dependent
+        temperature sensitivity (e.g. less heating at end of month).
+    """
+
+    def __init__(
+        self,
+        seq_len: int = 336,
+        pred_len: int = 168,
+        exog_size: int = 0,
+        include_holiday: bool = False,
+        use_temp_bins: bool = False,
+    ):
+        super().__init__()
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+        self.exog_size = exog_size
+        self.include_holiday = include_holiday
+        self.use_temp_bins = use_temp_bins and exog_size > 0
+
+        holiday_size = (seq_len + pred_len) if include_holiday else 0
+        bins_size = (seq_len + pred_len) * NUM_TEMP_BINS if self.use_temp_bins else 0
+        exog_flat_size = (seq_len + pred_len) * exog_size
+
+        if self.use_temp_bins:
+            self.temp_encoder = TempEncoder(n_bins=NUM_TEMP_BINS, use_context=True)
+
+        total_input = seq_len + holiday_size + exog_flat_size + bins_size
+        print(f"[LinearBaseline] use_temp_bins={self.use_temp_bins}, exog_size={exog_size}, input_size={total_input}")
+        self.linear = nn.Linear(total_input, pred_len)
+
+    def forward(
+        self,
+        x_enc: torch.Tensor,
+        x_mark_enc: torch.Tensor,
+        x_dec: torch.Tensor,
+        x_mark_dec: torch.Tensor
+    ) -> torch.Tensor:
+        inp = x_enc[:, :, 0]  # (B, seq_len)
+        if self.include_holiday:
+            past_holiday = x_mark_enc[:, :, HOLIDAY_MARK_IDX]                      # (B, seq_len)
+            future_holiday = x_mark_dec[:, -self.pred_len:, HOLIDAY_MARK_IDX]      # (B, pred_len)
+            inp = torch.cat([inp, past_holiday, future_holiday], dim=-1)
+        if self.exog_size > 0:
+            past_exog = x_mark_enc[:, :, -self.exog_size:]                         # (B, seq_len, exog_size)
+            future_exog = x_mark_dec[:, -self.pred_len:, -self.exog_size:]         # (B, pred_len, exog_size)
+            inp = torch.cat([inp, past_exog.flatten(1), future_exog.flatten(1)], dim=-1)
+            if self.use_temp_bins:
+                past_month   = x_mark_enc[:, :, MONTH_IDX]
+                past_day     = x_mark_enc[:, :, DAY_IDX]
+                past_hour    = x_mark_enc[:, :, HOUR_IDX]
+                past_holiday = x_mark_enc[:, :, HOLIDAY_MARK_IDX]
+                fut_month    = x_mark_dec[:, -self.pred_len:, MONTH_IDX]
+                fut_day      = x_mark_dec[:, -self.pred_len:, DAY_IDX]
+                fut_hour     = x_mark_dec[:, -self.pred_len:, HOUR_IDX]
+                fut_holiday  = x_mark_dec[:, -self.pred_len:, HOLIDAY_MARK_IDX]
+                past_bins    = self.temp_encoder(past_exog[:, :, 0], past_month, past_day, past_hour, past_holiday).flatten(1)
+                future_bins  = self.temp_encoder(future_exog[:, :, 0], fut_month, fut_day, fut_hour, fut_holiday).flatten(1)
+                inp = torch.cat([inp, past_bins, future_bins], dim=-1)
+        out = self.linear(inp)  # (B, pred_len)
+        return out.unsqueeze(-1)  # (B, pred_len, 1)
