@@ -35,6 +35,11 @@ class FlowConfig:
     model_type: str
     model_params: dict
 
+    # clustering (only required when experiment_type == REGION_CLUSTERING)
+    clustering_results_path: str | None = None
+    run_clustering: bool = False
+    n_clusters_per_region: dict[str, int] | None = None
+
     @classmethod
     def from_toml(cls, path: str | Path) -> "FlowConfig":
         with open(path, "rb") as f:
@@ -46,8 +51,9 @@ class FlowConfig:
             "day":  h.HorizonType.DAY,
         }
         experiment_type_map = {
-            "country": ExperimentType.COUNTRY,
-            "regions": ExperimentType.REGIONS,
+            "country":           ExperimentType.COUNTRY,
+            "regions":           ExperimentType.REGIONS,
+            "region_clustering": ExperimentType.REGION_CLUSTERING,
         }
 
         data     = raw["data"]
@@ -56,6 +62,12 @@ class FlowConfig:
 
         training_runs_raw = raw.get("training_runs", 0)
         training_runs = None if training_runs_raw == 0 else int(training_runs_raw)
+
+        clustering_cfg = raw.get("clustering", {})
+        clustering_results_path = clustering_cfg.get("results_path", None)
+        run_clustering = bool(clustering_cfg.get("run_clustering", False))
+        n_clusters_raw = clustering_cfg.get("n_clusters_per_region", {})
+        n_clusters_per_region = {k: int(v) for k, v in n_clusters_raw.items()} or None
 
         return cls(
             train=bool(raw["train"]),
@@ -73,7 +85,14 @@ class FlowConfig:
             train_epochs=int(training["train_epochs"]),
             model_type=str(model["type"]),
             model_params={k: v for k, v in model.items() if k != "type"},
+            clustering_results_path=clustering_results_path,
+            run_clustering=run_clustering,
+            n_clusters_per_region=n_clusters_per_region if n_clusters_per_region else None,
         )
+
+    @property
+    def is_sarima(self) -> bool:
+        return self.model_type == "sarimax"
 
     def make_model_factory(
         self,

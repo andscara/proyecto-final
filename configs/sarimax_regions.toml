@@ -1,0 +1,19 @@
+train = true
+
+[experiment]
+type = "country"
+
+[data]
+window_size    = 336
+horizon_type   = "hour"
+horizon_length = 168
+label_len      = 336
+batch_size     = 64   # unused by SARIMAX, kept for schema consistency
+
+[training]
+patience       = 0    # unused by SARIMAX
+learning_rate  = 0.0  # unused by SARIMAX
+train_epochs   = 0    # unused by SARIMAX
+
+[model]
+type = "sarimax"
