@@ -27,3 +27,4 @@ dropout   = 0.0
 factor    = 5
 d_mark    = 5       # month, day, weekday, hour, is_holiday
 exog_c_in = 1       # temp_media
+use_temp_bins   = true

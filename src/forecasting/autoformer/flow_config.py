@@ -119,6 +119,7 @@ class FlowConfig:
                     d_mark=int(p.get("d_mark", 5)),
                     exog_c_in=int(p.get("exog_c_in", 1)) if use_exog else 0,
                     use_exog_vars=use_exog,
+                    use_temp_bins=bool(p.get("use_temp_bins", False)),
                 )
 
         else:

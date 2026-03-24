@@ -34,6 +34,7 @@ class Autoformer(nn.Module):
             d_mark: int | None = None,
             exog_c_in: int = 0,
             use_exog_vars: bool = True,
+            use_temp_bins: bool = False,
     ):
         """
         Autoformer constructor
@@ -70,9 +71,11 @@ class Autoformer(nn.Module):
         # The series-wise connection inherently contains the sequential information.
         # Thus, we can discard the position embedding of transformers.
         self.enc_embedding = DataEmbedding_with_exog(enc_in, d_model, embed, freq,
-                                                  dropout, d_mark=d_mark, exog_c_in=exog_c_in, use_exog_vars=use_exog_vars)
+                                                  dropout, d_mark=d_mark, exog_c_in=exog_c_in, use_exog_vars=use_exog_vars,
+                                                  use_temp_bins=use_temp_bins)
         self.dec_embedding = DataEmbedding_with_exog(dec_in, d_model, embed, freq,
-                                                  dropout, d_mark=d_mark, exog_c_in=exog_c_in, use_exog_vars=use_exog_vars)
+                                                  dropout, d_mark=d_mark, exog_c_in=exog_c_in, use_exog_vars=use_exog_vars,
+                                                  use_temp_bins=use_temp_bins)
 
         # Encoder
         self.encoder = Encoder(

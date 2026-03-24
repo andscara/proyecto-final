@@ -260,6 +260,12 @@ class DataEmbedding_wo_pos(nn.Module):
         return self.dropout(x)
     
 class DataEmbedding_with_exog(nn.Module):
+    # x_mark layout: [month(0), day(1), weekday(2), hour(3), is_holiday(4), ...exog]
+    _MONTH_IDX   = 0
+    _DAY_IDX     = 1
+    _HOUR_IDX    = 3
+    _HOLIDAY_IDX = 4
+
     def __init__(
             self,
             c_in,
@@ -270,11 +276,14 @@ class DataEmbedding_with_exog(nn.Module):
             d_mark: int | None = None,
             exog_c_in: int = 0,
             use_exog_vars: bool = True,
+            use_temp_bins: bool = False,
+            n_temp_bins: int = NUM_TEMP_BINS,
         ):
         super(DataEmbedding_with_exog, self).__init__()
         self.d_mark = d_mark
         self.exog_c_in = exog_c_in
         self.use_exog_vars = use_exog_vars
+        self.use_temp_bins = use_temp_bins and exog_c_in > 0
         self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
         self.exog_embedding = nn.Linear(in_features=exog_c_in, out_features=d_model, bias=False)
@@ -282,9 +291,20 @@ class DataEmbedding_with_exog(nn.Module):
                                                     freq=freq, use_holidays=use_exog_vars) if embed_type != 'timeF' else TimeFeatureEmbedding(
             d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
         self.dropout = nn.Dropout(p=dropout)
+        if self.use_temp_bins:
+            self.temp_encoder = TempEncoder(n_bins=n_temp_bins, use_context=True)
+            self.temp_bins_proj = nn.Linear(n_temp_bins, d_model, bias=False)
 
     def forward(self, x, x_mark):
         x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark])
         if self.use_exog_vars and self.exog_c_in > 0:
             x = x + self.exog_embedding(x_mark[:, :, -self.exog_c_in:])
+        if self.use_temp_bins:
+            temp   = x_mark[:, :, -self.exog_c_in]              # first exog col = temp_media
+            month  = x_mark[:, :, self._MONTH_IDX]
+            day    = x_mark[:, :, self._DAY_IDX]
+            hour   = x_mark[:, :, self._HOUR_IDX]
+            holiday = x_mark[:, :, self._HOLIDAY_IDX]
+            bins = self.temp_encoder(temp, month, day, hour, holiday)  # (B, T, n_bins)
+            x = x + self.temp_bins_proj(bins)
         return self.dropout(x)
