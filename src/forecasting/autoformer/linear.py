@@ -34,6 +34,7 @@ class Linear(nn.Module):
         exog_size: int = 0,
         include_holiday: bool = False,
         use_temp_bins: bool = False,
+        learnable_bins: bool = True,
     ):
         super().__init__()
         self.seq_len = seq_len
@@ -47,7 +48,7 @@ class Linear(nn.Module):
         exog_flat_size = (seq_len + pred_len) * exog_size
 
         if self.use_temp_bins:
-            self.temp_encoder = TempEncoder(n_bins=NUM_TEMP_BINS, use_context=True)
+            self.temp_encoder = TempEncoder(n_bins=NUM_TEMP_BINS, use_context=learnable_bins, learnable=learnable_bins)
 
         total_input = seq_len + holiday_size + exog_flat_size + bins_size
         print(f"[LinearBaseline] use_temp_bins={self.use_temp_bins}, exog_size={exog_size}, input_size={total_input}")

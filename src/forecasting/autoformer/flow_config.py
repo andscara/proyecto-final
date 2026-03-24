@@ -113,6 +113,7 @@ class FlowConfig:
                     exog_size=exog_size,
                     include_holiday=bool(p.get("include_holiday", False)),
                     use_temp_bins=bool(p.get("use_temp_bins", False)),
+                    learnable_bins=bool(p.get("learnable_bins", False)),
                 )
 
         elif self.model_type == "baseline":
@@ -139,6 +140,7 @@ class FlowConfig:
                     exog_c_in=int(p.get("exog_c_in", 1)) if use_exog else 0,
                     use_exog_vars=use_exog,
                     use_temp_bins=bool(p.get("use_temp_bins", False)),
+                    learnable_bins=bool(p.get("learnable_bins", True)),
                 )
 
         else:

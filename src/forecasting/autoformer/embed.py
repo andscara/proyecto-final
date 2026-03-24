@@ -47,10 +47,16 @@ class TempEncoder(nn.Module):
     so the model starts from the exact same solution as the fixed bins.
     """
 
-    def __init__(self, n_bins: int = NUM_TEMP_BINS, use_context: bool = False):
+    def __init__(self, n_bins: int = NUM_TEMP_BINS, use_context: bool = False, learnable: bool = True):
         super().__init__()
         self.n_bins = n_bins
         self.use_context = use_context
+        self.learnable = learnable
+
+        if not learnable:
+            # Fixed hard bins — no learnable params, ignore context
+            return
+
         # Initialize thresholds at the original hand-crafted boundaries
         init_thresholds = torch.tensor(
             [_TEMP_MUY_FRIO, _TEMP_FRIO, _TEMP_CALOR, _TEMP_MUCHO_CALOR]
@@ -81,8 +87,11 @@ class TempEncoder(nn.Module):
         day:        (B, T)  raw day 1-31   (optional, required if use_context).
         hour:       (B, T)  raw hour 0-23  (optional, required if use_context).
         is_holiday: (B, T)  binary 0/1     (optional, required if use_context).
-        Returns (B, T, n_bins) soft step features.
+        Returns (B, T, n_bins) soft step features (learnable) or (B, T, 4) hard bins (fixed).
         """
+        if not self.learnable:
+            return temp_bins(t)
+
         thresholds = self.thresholds                                # (n_bins,)
         if self.use_context and month is not None and day is not None and hour is not None and is_holiday is not None:
             month_norm = (month - 1.0) / 11.0 - 0.5                # → [-0.5, 0.5]
@@ -278,6 +287,7 @@ class DataEmbedding_with_exog(nn.Module):
             use_exog_vars: bool = True,
             use_temp_bins: bool = False,
             n_temp_bins: int = NUM_TEMP_BINS,
+            learnable_bins: bool = True,
         ):
         super(DataEmbedding_with_exog, self).__init__()
         self.d_mark = d_mark
@@ -292,8 +302,8 @@ class DataEmbedding_with_exog(nn.Module):
             d_model=d_model, embed_type=embed_type, freq=freq, d_mark=d_mark)
         self.dropout = nn.Dropout(p=dropout)
         if self.use_temp_bins:
-            self.temp_encoder = TempEncoder(n_bins=n_temp_bins, use_context=True)
-            self.temp_bins_proj = nn.Linear(n_temp_bins, d_model, bias=False)
+            self.temp_encoder = TempEncoder(n_bins=n_temp_bins, use_context=learnable_bins, learnable=learnable_bins)
+            self.temp_bins_proj = nn.Linear(n_temp_bins if learnable_bins else NUM_TEMP_BINS, d_model, bias=False)
 
     def forward(self, x, x_mark):
         x = self.value_embedding(x) + self.temporal_embedding(x_mark[:, :, :self.d_mark])
