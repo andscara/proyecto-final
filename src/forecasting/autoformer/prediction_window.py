@@ -71,7 +71,9 @@ class PredictionWindow:
             'max_mae': np.max(maes),
             'mape': np.mean(mapes),
             'min_mape': np.min(mapes),
-            'max_mape': np.max(mapes)
+            'max_mape': np.max(mapes),
+            'std_mape': np.std(mapes),
+            'all_mapes': mapes
         }
         
     

@@ -41,12 +41,28 @@ def print_test_metrics(
     {prefix} MAX MAE: {errors['max_mae']:.4f}\n
     {prefix} MAPE: {errors['mape']:.2f} 
     {prefix} MIN MAPE: {errors['min_mape']:.2f} 
-    {prefix} MAX MAPE: {errors['max_mape']:.2f}\n
+    {prefix} MAX MAPE: {errors['max_mape']:.2f} 
+    {prefix} STD MAPE: {errors['std_mape']:.2f}
     """
+
 
     plt.text(0.1, 0.5, metrics_pattern, fontsize=12)
     plt.title(f"{prefix} Error Metrics", fontsize=16)
     plt.axis('off')
+    pdf.savefig()
+    plt.close()
+
+
+    #Plot all mapes
+    all_mapes = errors['all_mapes']
+    plt.figure(figsize=(10, 6))
+    # print the bin values in the histogram
+    counts, bins, patches = plt.hist(all_mapes, bins=20, edgecolor='black')
+    #print in the x-axis the bin values with 2 decimal places
+    plt.xticks(bins, [f"{b:.2f}" for b in bins], rotation=45)
+    plt.title(f"{prefix} MAPE Distribution", fontsize=16)
+    plt.xlabel("MAPE", fontsize=14)
+    plt.ylabel("Frequency", fontsize=14)
     pdf.savefig()
     plt.close()
 
