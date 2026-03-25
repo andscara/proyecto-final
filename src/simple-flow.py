@@ -66,7 +66,7 @@ def print_test_metrics(
     pdf.savefig()
     plt.close()
 
-def main(cfg: FlowConfig):
+def main(cfg: FlowConfig, config_name: str):
     train          = cfg.train
     expiment_type  = cfg.experiment_type
     training_runs  = cfg.training_runs
@@ -145,7 +145,7 @@ def main(cfg: FlowConfig):
         
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
-        plots_path = Path('results') / expiment_type.value / experiment_group.name / 'graficas.pdf'
+        plots_path = Path('results') / expiment_type.value / experiment_group.name / f'{config_name}.pdf'
         plots_path.parent.mkdir(parents=True, exist_ok=True)
 
         if cfg.is_sarima:
@@ -258,7 +258,7 @@ def main(cfg: FlowConfig):
                     prefix=f"{expiment_type.value} - {experiment_group.name}",
                     pdf=pdf
                 )
-    plots_path = Path('results') / expiment_type.value / f'graficas.pdf'
+    plots_path = Path('results') / f'{config_name}.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
     # need to sum all the y_preds_flat_results and y_reals_flat_results element-wise before flattening, since we want to compare the sum of the predictions of all regions with the sum of the real values of all regions
     y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
@@ -289,4 +289,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="Path to TOML config file (e.g. configs/baseline_country.toml)")
     args = parser.parse_args()
-    main(FlowConfig.from_toml(args.config))
+    config_name = Path(args.config).stem
+    main(FlowConfig.from_toml(args.config), config_name)
