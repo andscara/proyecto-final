@@ -1,0 +1,37 @@
+train = true
+training_runs = 3   # train 3 times, keep best
+
+[clustering]
+run_clustering = true   # set to false to reuse existing assignments from results_path
+
+[clustering.n_clusters_per_region]
+NORTH     = 5
+SOUTH     = 5
+EAST      = 5
+WEST      = 5
+MONTEVIDEO = 5
+
+[data]
+window_size    = 336
+horizon_type   = "hour"
+horizon_length = 168
+label_len      = 336
+batch_size     = 128
+
+[training]
+patience       = 50
+learning_rate  = 0.00003
+train_epochs   = 300
+
+[model]
+type      = "autoformer"
+d_model   = 128
+n_heads   = 2
+d_ff      = 256
+e_layers  = 2
+d_layers  = 1
+dropout   = 0.0
+factor    = 5
+d_mark    = 5       # month, day, weekday, hour, is_holiday
+exog_c_in = 0       # temp_media
+use_temp_bins   = false

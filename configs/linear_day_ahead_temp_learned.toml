@@ -1,9 +1,6 @@
 train = true
 training_runs = 0   # 0 = single run with fixed seed for reproducibility
 
-[experiment]
-type = "country"
-
 [data]
 window_size    = 336    # 24*7*2 (2 weeks)
 horizon_type   = "hour"

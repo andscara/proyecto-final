@@ -1,0 +1,21 @@
+train = true
+training_runs = 0   # 0 = single run with fixed seed for reproducibility
+
+[data]
+window_size    = 168    # 24*7 (1 week)
+horizon_type   = "hour"
+horizon_length = 24    # 24*7 (1 day)
+label_len      = 0
+batch_size     = 128
+
+[training]
+patience       = 50
+learning_rate  = 0.00003
+train_epochs   = 3000
+
+[model]
+type            = "linear"
+include_holiday = true
+exog_cols       = ["temp_media"]
+use_temp_bins = true
+learnable_bins  = false

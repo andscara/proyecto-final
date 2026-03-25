@@ -1,8 +1,15 @@
 train = true
-training_runs = 0   # train 3 times, keep best
+training_runs = 3   # train 3 times, keep best
 
-[experiment]
-type = "country"
+[clustering]
+run_clustering = true   # set to false to reuse existing assignments from results_path
+
+[clustering.n_clusters_per_region]
+NORTH     = 5
+SOUTH     = 5
+EAST      = 5
+WEST      = 5
+MONTEVIDEO = 5
 
 [data]
 window_size    = 336
@@ -27,5 +34,4 @@ dropout   = 0.0
 factor    = 5
 d_mark    = 5       # month, day, weekday, hour, is_holiday
 exog_c_in = 1       # temp_media
-exog_cols       = ["temp_media"]
 use_temp_bins   = true

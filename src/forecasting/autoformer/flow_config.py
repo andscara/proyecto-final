@@ -23,9 +23,6 @@ class FlowConfig:
     label_len: int
     batch_size: int
 
-    # experiment
-    experiment_type: ExperimentType
-
     # training
     patience: int
     learning_rate: float
@@ -49,11 +46,6 @@ class FlowConfig:
             "hour": h.HorizonType.HOUR,
             "week": h.HorizonType.WEEK,
             "day":  h.HorizonType.DAY,
-        }
-        experiment_type_map = {
-            "country":           ExperimentType.COUNTRY,
-            "regions":           ExperimentType.REGIONS,
-            "region_clustering": ExperimentType.REGION_CLUSTERING,
         }
 
         data     = raw["data"]
@@ -79,13 +71,11 @@ class FlowConfig:
             ),
             label_len=int(data["label_len"]),
             batch_size=int(data["batch_size"]),
-            experiment_type=experiment_type_map[raw["experiment"]["type"]],
             patience=int(training["patience"]),
             learning_rate=float(training["learning_rate"]),
             train_epochs=int(training["train_epochs"]),
             model_type=str(model["type"]),
             model_params={k: v for k, v in model.items() if k != "type"},
-            clustering_results_path=clustering_results_path,
             run_clustering=run_clustering,
             n_clusters_per_region=n_clusters_per_region if n_clusters_per_region else None,
         )

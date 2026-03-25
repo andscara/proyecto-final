@@ -18,7 +18,7 @@ import numpy as np
 
 load_dotenv()
 from typing import List
-from forecasting.autoformer.experiment_handler import experiment_factory, BaseExperimentHandler
+from forecasting.autoformer.experiment_handler import experiment_factory, BaseExperimentHandler, ExperimentType
 from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
 
 EXOG_COLS = ["temp_media"]
@@ -66,9 +66,9 @@ def print_test_metrics(
     pdf.savefig()
     plt.close()
 
-def main(cfg: FlowConfig, config_name: str):
+def main(cfg: FlowConfig, config_name: str, experiment_type: ExperimentType):
     train          = cfg.train
-    expiment_type  = cfg.experiment_type
+    expiment_type  = experiment_type
     training_runs  = cfg.training_runs
     WINDOW_SIZE    = cfg.window_size
     HORIZON        = cfg.horizon
@@ -95,6 +95,8 @@ def main(cfg: FlowConfig, config_name: str):
 
     global_prediction_windows: List[PredictionWindow] = []
 
+    clustering_results_path = Path('results') / expiment_type.value / config_name / "clustering_assignments.json"
+
     experiment_handler: BaseExperimentHandler = experiment_factory(
             experiment_type=expiment_type,
             db_path=os.getenv("DB_PATH"),
@@ -109,7 +111,7 @@ def main(cfg: FlowConfig, config_name: str):
                 exog_cols=EXOG_COLS
             ),
             clustering_path=os.getenv("CLUSTERING_PATH"),
-            clustering_results_path=cfg.clustering_results_path,
+            clustering_results_path=clustering_results_path,
             run_clustering=cfg.run_clustering,
             n_clusters_per_region=cfg.n_clusters_per_region,
         )
@@ -145,7 +147,7 @@ def main(cfg: FlowConfig, config_name: str):
         
         seq_len = WINDOW_SIZE
         pred_len = HORIZON.length
-        plots_path = Path('results') / expiment_type.value / experiment_group.name / f'{config_name}.pdf'
+        plots_path = Path('results') / expiment_type.value / config_name / f'{experiment_group.name}.pdf'
         plots_path.parent.mkdir(parents=True, exist_ok=True)
 
         if cfg.is_sarima:
@@ -258,7 +260,8 @@ def main(cfg: FlowConfig, config_name: str):
                     prefix=f"{expiment_type.value} - {experiment_group.name}",
                     pdf=pdf
                 )
-    plots_path = Path('results') / f'{config_name}.pdf'
+                trainer.plot_temp_encoder_thresholds(pdf=pdf)
+    plots_path = Path('results') / f'{expiment_type.value}_{config_name}.pdf'
     plots_path.parent.mkdir(parents=True, exist_ok=True)
     # need to sum all the y_preds_flat_results and y_reals_flat_results element-wise before flattening, since we want to compare the sum of the predictions of all regions with the sum of the real values of all regions
     y_preds_flat = np.sum(np.array(y_preds_flat_results), axis=0).flatten()
@@ -288,6 +291,7 @@ def main(cfg: FlowConfig, config_name: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="Path to TOML config file (e.g. configs/baseline_country.toml)")
+    parser.add_argument("experiment_type", choices=[e.value for e in ExperimentType], help="Experiment type (e.g. country, regions, region_clustering)")
     args = parser.parse_args()
     config_name = Path(args.config).stem
-    main(FlowConfig.from_toml(args.config), config_name)
+    main(FlowConfig.from_toml(args.config), config_name, ExperimentType(args.experiment_type))

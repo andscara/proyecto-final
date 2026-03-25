@@ -302,12 +302,21 @@ class Trainer:
             if runs > 1:
                 print(f"\nBest run Vali MAPE: {best_overall_mape:.2f}%")
 
-        # print the TempEncoder learned thresholds if applicable
+    def plot_temp_encoder_thresholds(self, pdf: PdfPages):
+        """Plot TempEncoder learned thresholds to a PDF page, if applicable."""
         from forecasting.autoformer.embed import TempEncoder
         for name, module in self.model.named_modules():
             if isinstance(module, TempEncoder) and module.learnable:
                 thresholds_celsius = module.thresholds.detach().cpu() * 65 - 15
-                print(f"[TempEncoder '{name}'] learned thresholds (°C): {thresholds_celsius.tolist()}")
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.bar(range(len(thresholds_celsius)), thresholds_celsius.tolist())
+                ax.set_xlabel("Bin index")
+                ax.set_ylabel("Threshold (°C)")
+                ax.set_title(f"TempEncoder '{name}' learned thresholds")
+                for i, v in enumerate(thresholds_celsius.tolist()):
+                    ax.text(i, v, f"{v:.1f}", ha='center', va='bottom', fontsize=8)
+                pdf.savefig(fig)
+                plt.close(fig)
 
     def _inverse_scale(
         self,

@@ -1,13 +1,10 @@
 train = true
 
-[experiment]
-type = "country"
-
 [data]
 window_size    = 336
 horizon_type   = "hour"
 horizon_length = 168
-label_len      = 336
+label_len      = 0
 batch_size     = 64   # unused by SARIMAX, kept for schema consistency
 
 [training]
