@@ -5,17 +5,17 @@ training_runs = 3   # train 3 times, keep best
 run_clustering = true   # set to false to reuse existing assignments from results_path
 
 [clustering.n_clusters_per_region]
-NORTH     = 5
-SOUTH     = 5
-EAST      = 5
-WEST      = 5
-MONTEVIDEO = 5
+NORTH     = 9
+SOUTH     = 8
+EAST      = 8
+WEST      = 8
+MONTEVIDEO = 10
 
 [data]
-window_size    = 336
+window_size    = 168
 horizon_type   = "hour"
-horizon_length = 168
-label_len      = 336
+horizon_length = 24
+label_len      = 168
 batch_size     = 128
 
 [training]

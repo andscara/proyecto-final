@@ -1,6 +1,16 @@
 train = true
 training_runs = 0   # 0 = single run with fixed seed for reproducibility
 
+[clustering]
+run_clustering = true   # set to false to reuse existing assignments from results_path
+
+[clustering.n_clusters_per_region]
+NORTH     = 9
+SOUTH     = 8
+EAST      = 8
+WEST      = 8
+MONTEVIDEO = 10
+
 [data]
 window_size    = 336    # 24*7*2 (2 weeks)
 horizon_type   = "hour"
