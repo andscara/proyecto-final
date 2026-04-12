@@ -211,6 +211,7 @@ def data_splitter(
         scale=exp_config.scale,
         exog_cols=exp_config.exog_cols
     )
+    print(f"Created {len(train_data_windows)} training windows.")
 
     val_test_data_windows, val_test_time_features_windows, val_test_scaler = create_windows(
         df=val_test_df,
@@ -281,6 +282,7 @@ def data_splitter(
         pred_len=pred_len,
         scaler=val_test_scaler
     )
+
     test_dataset = WindowsDataset(
         data_windows=test_data_windows,
         time_features_windows=test_time_features_windows,
@@ -289,6 +291,8 @@ def data_splitter(
         pred_len=pred_len,
         scaler=val_test_scaler
     )
+    
+    print(f"Created {len(val_data_windows)} validation windows and {len(test_data_windows)} testing windows.")
     return all_dataset, train_dataset, val_dataset, test_dataset
 
     
