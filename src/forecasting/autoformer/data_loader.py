@@ -11,7 +11,6 @@ import numpy as np
 from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
 import horizon as h
 
-from runner import train
 
 class WindowsDataset(data.Dataset):
     def __init__(
