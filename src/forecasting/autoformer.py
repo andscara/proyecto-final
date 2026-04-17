@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from forecasting.autoformer.auto_correlation import AutoCorrelation, AutoCorrelationLayer
-from forecasting.autoformer.embed import DataEmbedding_with_exog
-from forecasting.autoformer.encoder_decoder import Decoder, DecoderLayer, Encoder, EncoderLayer, MyLayernorm, SeriesDecomp
+from forecasting.auto_correlation import AutoCorrelation, AutoCorrelationLayer
+from forecasting.embed import DataEmbedding_with_exog
+from forecasting.encoder_decoder import Decoder, DecoderLayer, Encoder, EncoderLayer, MyLayernorm, SeriesDecomp
 
 
 class Autoformer(nn.Module):

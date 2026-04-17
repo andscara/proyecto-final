@@ -6,10 +6,10 @@ from typing import Callable
 import torch.nn as nn
 import horizon as h
 
-from forecasting.autoformer.experiment_handler import ExperimentType
-from forecasting.autoformer.autoformer import Autoformer
-from forecasting.autoformer.linear import Linear
-from forecasting.autoformer.baseline import Baseline
+from forecasting.experiment_handler import ExperimentType
+from forecasting.autoformer import Autoformer
+from forecasting.linear import Linear
+from forecasting.baseline import Baseline
 
 
 @dataclass

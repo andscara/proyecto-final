@@ -9,10 +9,10 @@ import duckdb as ddb
 import numpy as np
 import pandas as pd
 
-from forecasting.autoformer.data_loader import data_splitter
+from forecasting.data_loader import data_splitter
 from dataclasses import dataclass
-from forecasting.autoformer.data_loader import WindowsDataset
-from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
+from forecasting.data_loader import WindowsDataset
+from forecasting.experiment_configuration import ExperimentConfiguration
 
 @dataclass
 class ExperimentGroup:

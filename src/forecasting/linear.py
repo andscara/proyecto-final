@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from forecasting.autoformer.embed import NUM_TEMP_BINS, TempEncoder
+from forecasting.embed import NUM_TEMP_BINS, TempEncoder
 
 HOLIDAY_MARK_IDX = 4  # position of is_holiday in x_mark_enc (month, day, weekday, hour, is_holiday, ...)
 MONTH_IDX = 0
