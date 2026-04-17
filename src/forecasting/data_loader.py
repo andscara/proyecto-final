@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from numpy.typing import NDArray
 from typing import Any
 import numpy as np
-from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
+from forecasting.experiment_configuration import ExperimentConfiguration
 import horizon as h
 
 

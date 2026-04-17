@@ -13,8 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from statsforecast import StatsForecast
 from statsforecast.models import MSTL, AutoARIMA
 
-from forecasting.autoformer.prediction_window import PredictionWindow
-from forecasting.autoformer.trainer import Trainer
+from forecasting.prediction_window import PredictionWindow
+from forecasting.trainer import Trainer
 
 
 class SARIMAXRunner:

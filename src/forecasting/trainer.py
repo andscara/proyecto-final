@@ -5,15 +5,15 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 import numpy as np
-from forecasting.autoformer.data_loader import WindowsDataset
-from forecasting.autoformer.tools import EarlyStopping, StandardScaler, adjust_learning_rate
+from forecasting.data_loader import WindowsDataset
+from forecasting.tools import EarlyStopping, StandardScaler, adjust_learning_rate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy.typing as npt
 from datetime import datetime, timedelta
 import torch.nn.functional as F
 from pathlib import Path
-from forecasting.autoformer.prediction_window import PredictionWindow
+from forecasting.prediction_window import PredictionWindow
 
 class Trainer:
     def __init__(
@@ -304,7 +304,7 @@ class Trainer:
 
     def plot_temp_encoder_thresholds(self, pdf: PdfPages):
         """Plot TempEncoder learned thresholds to a PDF page, if applicable."""
-        from forecasting.autoformer.embed import TempEncoder
+        from forecasting.embed import TempEncoder
         for name, module in self.model.named_modules():
             if isinstance(module, TempEncoder) and module.learnable:
                 thresholds_celsius = module.thresholds.detach().cpu() * 65 - 15

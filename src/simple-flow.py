@@ -7,10 +7,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 import random
 import torch
 
-from forecasting.autoformer.prediction_window import PredictionWindow
-from forecasting.autoformer.trainer import Trainer
-from forecasting.autoformer.sarimax_runner import SARIMAXRunner
-from forecasting.autoformer.flow_config import FlowConfig
+from forecasting.prediction_window import PredictionWindow
+from forecasting.trainer import Trainer
+from forecasting.sarimax_runner import SARIMAXRunner
+from forecasting.flow_config import FlowConfig
 from torch.utils import data
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,8 +18,8 @@ import numpy as np
 
 load_dotenv()
 from typing import List
-from forecasting.autoformer.experiment_handler import experiment_factory, BaseExperimentHandler, ExperimentType
-from forecasting.autoformer.experiment_configuration import ExperimentConfiguration
+from forecasting.experiment_handler import experiment_factory, BaseExperimentHandler, ExperimentType
+from forecasting.experiment_configuration import ExperimentConfiguration
 
 EXOG_COLS = ["temp_media"]
 
