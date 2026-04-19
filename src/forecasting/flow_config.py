@@ -101,9 +101,7 @@ class FlowConfig:
                     seq_len=seq_len,
                     pred_len=pred_len,
                     exog_size=exog_size,
-                    include_holiday=bool(p.get("include_holiday", False)),
-                    use_temp_bins=bool(p.get("use_temp_bins", False)),
-                    learnable_bins=bool(p.get("learnable_bins", False)),
+                    include_holiday=bool(p.get("include_holiday", False))
                 )
 
         elif self.model_type == "baseline":
